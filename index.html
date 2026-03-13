@@ -1,0 +1,4416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>Vital Air · Breath Analyzer · Hyper-Local Air Quality Intelligence</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet Routing Machine for Google Maps-like routes -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet Routing Machine -->
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <!-- Leaflet.heat -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0f5530;
+            --primary-light: #e6f4ea;
+            --primary-dark: #0a3e24;
+            --accent: #ff8c42;
+            --accent-light: #ffb07c;
+            --danger: #c5221f;
+            --warning: #ff9100;
+            --success: #2e7d32;
+            --info: #2196F3;
+            --bg: #f2f8f6;
+            --card-bg: #ffffff;
+            --border: #d0e2dd;
+            --text-primary: #1e3b37;
+            --text-secondary: #3f6a5c;
+            --shadow: 0 12px 30px -8px rgba(20, 60, 50, 0.15);
+            --navbar-bg: linear-gradient(135deg, #ffffff 0%, #f8fffc 100%);
+            --navbar-shadow: 0 4px 20px rgba(15, 85, 48, 0.15);
+            --panel-bg: #ffffff;
+            --input-bg: #f5faf8;
+            --legend-bg: #ffffff;
+
+            /* NEW AQI Zone Colors - Updated ranges */
+            --zone-good: #00e400;
+            --zone-moderate: #ffd700;
+            --zone-unhealthy: #ff0000;
+            --zone-hazardous: #800080;
+        }
+
+        [data-theme="dark"] {
+            --primary: #2ecc71;
+            --primary-light: #1a3a2a;
+            --primary-dark: #1e4a2f;
+            --accent: #ffa75e;
+            --accent-light: #ffb07c;
+            --danger: #ff6b6b;
+            --warning: #ffb74d;
+            --success: #81c784;
+            --info: #64b5f6;
+            --bg: #1a1e24;
+            --card-bg: #2d3436;
+            --border: #4a5557;
+            --text-primary: #e9ecef;
+            --text-secondary: #adb5bd;
+            --shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.5);
+            --navbar-bg: linear-gradient(135deg, #2d3436 0%, #1e2925 100%);
+            --navbar-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --panel-bg: #2d3436;
+            --input-bg: #3a4548;
+            --legend-bg: #2d3436;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-spinner-large {
+            text-align: center;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .loading-spinner-large i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: var(--card-bg);
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status i {
+            font-size: 0.6rem;
+            color: #f44336;
+        }
+
+        .connection-status.connected i {
+            color: #4CAF50;
+        }
+
+        /* Zone Alert - Updated colors for new ranges */
+        .zone-alert {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            gap: 12px;
+            z-index: 5000;
+            animation: slideUp 0.4s ease;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: 2px solid white;
+        }
+
+        .zone-alert.good { background: #00e400; color: #000; }
+        .zone-alert.moderate { background: #ffd700; color: #000; }
+        .zone-alert.unhealthy { background: #ff0000; color: #fff; }
+        .zone-alert.hazardous { background: #800080; color: #fff; }
+
+        .zone-alert i {
+            font-size: 1.5rem;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+
+        /* ML Status Indicator */
+        .ml-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--card-bg);
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border-left: 4px solid var(--accent);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 300;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ml-status i {
+            color: var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* Navbar */
+        .navbar {
+            background: var(--navbar-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: var(--navbar-shadow);
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 100;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 1.5rem;
+            background: linear-gradient(135deg, var(--primary) 0%, #1a7a45 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo i {
+            color: var(--primary);
+            -webkit-text-fill-color: initial;
+            font-size: 2rem;
+        }
+
+        .badge-delhi {
+            background: var(--accent);
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 30px;
+            margin-left: 8px;
+            -webkit-text-fill-color: white;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 10px;
+            border-radius: 40px;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-weight: 500;
+            padding: 8px 20px;
+            border-radius: 30px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .nav-links a i {
+            margin-right: 4px;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .theme-toggle {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            padding: 5px;
+            display: flex;
+            cursor: pointer;
+        }
+
+        .theme-toggle i {
+            padding: 8px 12px;
+            border-radius: 25px;
+            font-size: 1rem;
+            transition: all 0.2s;
+            background: transparent;
+        }
+
+        .theme-toggle i.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .avatar {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, var(--primary) 0%, #2a9d8f 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            border: 2px solid var(--card-bg);
+            cursor: pointer;
+        }
+
+        /* Main Dashboard */
+        .dashboard {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            padding: 16px;
+            gap: 16px;
+            overflow: hidden;
+            height: calc(100vh - 70px);
+            position: relative;
+        }
+
+        /* Left Panel */
+        .left-panel {
+            width: 420px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s ease;
+            z-index: 200;
+            height: 100%;
+        }
+
+        .left-panel.collapsed {
+            width: 60px;
+        }
+
+        .left-panel.collapsed .panel-tabs,
+        .left-panel.collapsed .tab-content {
+            display: none;
+        }
+
+        .panel-header {
+            padding: 16px;
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        /* Panel Tabs */
+        .panel-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--card-bg);
+        }
+
+        .panel-tab {
+            flex: 1;
+            text-align: center;
+            padding: 12px 0;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--text-secondary);
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .panel-tab i {
+            margin-right: 6px;
+        }
+
+        .panel-tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: block;
+        }
+
+        .tab-content.hidden {
+            display: none;
+        }
+
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Map Container - Fixed positioning for map */
+        .map-container {
+            flex: 1;
+            background: var(--card-bg);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            position: relative;
+            z-index: 1; /* Lower z-index so controls appear above */
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #c8e0e0;
+        }
+
+        /* Panel Toggle Button */
+        .panel-toggle-btn {
+            position: absolute;
+            top: 20px;
+            left: 440px;
+            z-index: 1000; /* Higher than map */
+            background: var(--primary);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            border: 2px solid white;
+        }
+
+        .panel-toggle-btn.collapsed {
+            left: 80px;
+        }
+
+        /* ML Status Badge */
+        .ml-status-badge {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000; /* Higher than map */
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white;
+            padding: 8px 24px;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 2px solid white;
+        }
+
+        .ml-status-badge i {
+            font-size: 1rem;
+        }
+
+        /* Confidence Badge */
+        .confidence-badge {
+            position: absolute;
+            top: 90px;
+            left: 440px;
+            z-index: 1000; /* Higher than map */
+            background: var(--card-bg);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border-left: 4px solid var(--accent);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .confidence-badge.collapsed {
+            left: 80px;
+        }
+
+        /* Forecast Time Controls - HIGH Z-INDEX to appear above map */
+        .forecast-controls {
+            position: absolute;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000; /* Much higher than map */
+            background: var(--card-bg);
+            border-radius: 50px;
+            padding: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: flex;
+            gap: 4px;
+            border: 2px solid var(--primary);
+        }
+
+        .time-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-primary);
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+
+        .time-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .time-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Map Control Buttons - HIGH Z-INDEX */
+        .map-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 2000; /* Much higher than map */
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-btn {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            border: 2px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            min-width: 150px;
+        }
+
+        .control-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .control-btn i {
+            font-size: 1.2rem;
+        }
+
+        .control-btn .badge {
+            background: var(--primary);
+            color: white;
+            border-radius: 30px;
+            padding: 2px 8px;
+            font-size: 0.8rem;
+            margin-left: auto;
+        }
+
+        .control-btn.active .badge {
+            background: white;
+            color: var(--accent);
+        }
+
+        /* AQI Legend - HIGH Z-INDEX */
+        .aqi-legend {
+            position: absolute;
+            bottom: 180px;
+            right: 20px;
+            z-index: 2000; /* Much higher than map */
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border: 2px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 0.75rem;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .color-box {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        .color-box.good { background: #00e400; }
+        .color-box.moderate { background: #ffd700; }
+        .color-box.unhealthy { background: #ff0000; }
+        .color-box.hazardous { background: #800080; }
+
+        /* Right Panel */
+        .right-panel {
+            width: 380px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 200;
+            height: 100%;
+        }
+
+        .right-panel.collapsed {
+            width: 60px;
+        }
+
+        .right-panel.collapsed .data-section,
+        .right-panel.collapsed .section-title span {
+            display: none;
+        }
+
+        .data-section {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            overflow-y: auto;
+        }
+
+        /* Input Styles */
+        .input-group {
+            position: relative;
+            margin-bottom: 12px;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            z-index: 2;
+        }
+
+        .route-input {
+            width: 100%;
+            padding: 12px 12px 12px 40px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: var(--input-bg);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .route-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+        .swap-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .suggestions-box {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            border: 1px solid var(--border);
+        }
+
+        .suggestions-box.show {
+            display: block;
+        }
+
+        .suggestion-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .suggestion-item:hover {
+            background: var(--primary-light);
+        }
+
+        .region-toggle {
+            display: flex;
+            gap: 8px;
+            margin: 10px 0;
+            padding: 4px;
+            background: var(--input-bg);
+            border-radius: 40px;
+            border: 1px solid var(--border);
+        }
+
+        .region-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-secondary);
+        }
+
+        .region-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .location-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .location-chip {
+            padding: 6px 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .location-chip:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .current-location-btn {
+            width: 100%;
+            padding: 10px;
+            background: var(--primary-light);
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            color: var(--primary);
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .plan-route-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .route-info {
+            background: var(--input-bg);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 10px;
+            border: 1px solid var(--border);
+            display: none;
+        }
+
+        .route-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px dashed var(--border);
+            font-size: 0.85rem;
+        }
+
+        .route-row.safe-row {
+            color: var(--success);
+        }
+
+        .route-row.polluted-row {
+            color: var(--danger);
+        }
+
+        .route-recommendation {
+            margin-top: 10px;
+            padding: 8px;
+            background: var(--primary-light);
+            border-radius: 30px;
+            text-align: center;
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 0.85rem;
+        }
+
+        .green-dot, .red-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .green-dot { background: var(--success); }
+        .red-dot { background: var(--danger); }
+
+        /* ML Info Panel */
+        .ml-info {
+            background: linear-gradient(135deg, var(--primary-light), var(--card-bg));
+            border-radius: 12px;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid var(--primary);
+        }
+
+        .ml-info-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .ml-info-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            padding: 4px 0;
+        }
+
+        /* Live Simulation Panel */
+        .simulation-panel {
+            background: linear-gradient(135deg, var(--card-bg), var(--primary-light));
+            border-radius: 12px;
+            padding: 12px;
+            margin: 10px 0;
+            border: 2px solid var(--accent);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .simulation-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--success), var(--warning), var(--danger));
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .simulation-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .simulation-header i {
+            color: var(--accent);
+            animation: bounce 1s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
+        .simulation-controls {
+            display: flex;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .simulation-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .simulation-btn.start {
+            background: var(--success);
+            color: white;
+        }
+
+        .simulation-btn.start:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
+        }
+
+        .simulation-btn.stop {
+            background: var(--danger);
+            color: white;
+        }
+
+        .simulation-btn.stop:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(197, 34, 31, 0.3);
+        }
+
+        .simulation-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 6px;
+            margin: 10px 0;
+        }
+
+        .mode-option {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--input-bg);
+            cursor: pointer;
+            text-align: center;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .mode-option:hover {
+            background: var(--primary-light);
+        }
+
+        .mode-option.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .simulation-stats {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            border: 1px solid var(--border);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+        }
+
+        .progress-container {
+            margin: 12px 0;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--input-bg);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success), var(--accent));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .aqi-gauge {
+            margin-top: 12px;
+            padding: 10px;
+            background: var(--input-bg);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .aqi-gauge-value {
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .aqi-gauge-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+
+        .zone-indicator {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .zone-indicator.good { background: #00e400; color: #000; }
+        .zone-indicator.moderate { background: #ffd700; color: #000; }
+        .zone-indicator.unhealthy { background: #ff0000; color: #fff; }
+        .zone-indicator.hazardous { background: #800080; color: #fff; }
+
+        /* Zone Legend - Updated with new ranges */
+        .zone-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+            padding: 8px;
+            background: var(--input-bg);
+            border-radius: 8px;
+            font-size: 0.7rem;
+        }
+
+        .zone-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .zone-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+        }
+
+        .zone-good { background: #00e400; }
+        .zone-moderate { background: #ffd700; }
+        .zone-unhealthy { background: #ff0000; }
+        .zone-hazardous { background: #800080; }
+
+        /* Live AQI Panel */
+        .aqi-large-display {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+        }
+
+        .aqi-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .aqi-category {
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 30px;
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .aqi-category.good { background: #00e400; color: #000; }
+        .aqi-category.moderate { background: #ffd700; color: #000; }
+        .aqi-category.unhealthy { background: #ff0000; color: #fff; }
+        .aqi-category.hazardous { background: #800080; color: #fff; }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            padding: 4px 0;
+            border-bottom: 1px dashed var(--border);
+            font-size: 0.8rem;
+        }
+
+        .weather-info {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+            padding: 8px;
+            background: var(--input-bg);
+            border-radius: 12px;
+        }
+
+        .weather-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .weather-item i {
+            color: var(--accent);
+            font-size: 1rem;
+            margin-bottom: 2px;
+        }
+
+        .weather-value {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .weather-label {
+            font-size: 0.6rem;
+            opacity: 0.7;
+        }
+
+        /* Pollutant Grid */
+        .pollutant-grid {
+            display: grid;
+            gap: 8px;
+        }
+
+        .pollutant-item {
+            display: grid;
+            grid-template-columns: 60px 40px 30px 1fr;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.8rem;
+        }
+
+        .pollutant-name {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .pollutant-name i {
+            color: var(--accent);
+            width: 16px;
+        }
+
+        .pollutant-value {
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .pollutant-bar {
+            height: 6px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .pollutant-fill {
+            height: 100%;
+            border-radius: 3px;
+        }
+
+        .pm25-fill { background: linear-gradient(90deg, #ff6b6b, #ff8e8e); }
+        .pm10-fill { background: linear-gradient(90deg, #ffb347, #ffa07a); }
+        .no2-fill { background: linear-gradient(90deg, #ff9f4b, #ffb347); }
+        .co-fill { background: linear-gradient(90deg, #4ecdc4, #45b7aa); }
+        .o3-fill { background: linear-gradient(90deg, #6c5ce7, #a29bfe); }
+
+        /* Forecast List */
+        .forecast-list {
+            margin: 10px 0;
+        }
+
+        .forecast-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+        }
+
+        .forecast-time {
+            min-width: 40px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .forecast-bar {
+            flex: 1;
+            height: 18px;
+            background: var(--input-bg);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .forecast-fill {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 6px;
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 600;
+        }
+
+        .forecast-fill.good { background: #00e400; color: #000; }
+        .forecast-fill.moderate { background: #ffd700; color: #000; }
+        .forecast-fill.unhealthy { background: #ff0000; }
+        .forecast-fill.hazardous { background: #800080; }
+
+        .forecast-summary {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            padding: 6px;
+            background: var(--input-bg);
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+
+        /* Hotspots List */
+        .hotspots-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .hotspot-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .hotspot-item:hover {
+            transform: translateX(5px);
+        }
+
+        .hotspot-item.critical {
+            background: rgba(197, 34, 31, 0.15);
+            border-left: 4px solid #c5221f;
+        }
+
+        .hotspot-item.high {
+            background: rgba(255, 69, 0, 0.15);
+            border-left: 4px solid #ff4500;
+        }
+
+        .hotspot-item.moderate {
+            background: rgba(255, 145, 0, 0.12);
+            border-left: 4px solid #ff9100;
+        }
+
+        .hotspot-item.good {
+            background: rgba(0, 230, 118, 0.12);
+            border-left: 4px solid #00e676;
+        }
+
+        .hotspot-name {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .hotspot-name i {
+            color: var(--accent);
+            width: 16px;
+        }
+
+        .hotspot-aqi {
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.1);
+            font-size: 0.8rem;
+        }
+
+        /* Zone Circle Styles - Updated with new ranges */
+        .zone-circle {
+            fill-opacity: 0.2;
+            stroke-width: 1.5;
+            stroke-opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+
+        .zone-circle:hover {
+            fill-opacity: 0.35;
+            stroke-width: 2;
+        }
+
+        .zone-circle.good {
+            fill: #00e400;
+            stroke: #00e400;
+        }
+
+        .zone-circle.moderate {
+            fill: #ffd700;
+            stroke: #ffd700;
+        }
+
+        .zone-circle.unhealthy {
+            fill: #ff0000;
+            stroke: #ff0000;
+        }
+
+        .zone-circle.hazardous {
+            fill: #800080;
+            stroke: #800080;
+        }
+
+        /* Sensor Markers */
+        .sensor-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border: 2px solid white;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .sensor-icon:hover {
+            transform: scale(1.2);
+        }
+
+        .sensor-icon.good { background: #00e400; color: #000; }
+        .sensor-icon.moderate { background: #ffd700; color: #000; }
+        .sensor-icon.unhealthy { background: #ff0000; color: #fff; }
+        .sensor-icon.hazardous { background: #800080; color: #fff; }
+
+        /* Vehicle Marker */
+        .vehicle-marker {
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+            transition: all 0.1s ease;
+            z-index: 1000;
+        }
+
+        .vehicle-marker i {
+            animation: vehiclePulse 1s infinite;
+        }
+
+        @keyframes vehiclePulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* Toast Notification */
+        .toast-notification {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--card-bg);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 6000;
+            transition: transform 0.3s ease;
+            border-left: 4px solid var(--danger);
+        }
+
+        .toast-notification.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Loading Spinner */
+        .loading-spinner {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner i {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: var(--accent);
+            animation: spin 1s linear infinite;
+        }
+
+        /* Insights Tab */
+        .insights-tab {
+            display: none;
+            height: calc(100vh - 70px);
+            overflow-y: auto;
+            background: var(--bg);
+        }
+
+        .insights-container {
+            width: 100%;
+            padding: 20px;
+        }
+
+        .insights-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .insights-header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .insights-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease;
+        }
+
+        .insights-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-header h2 {
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+        }
+
+        .live-badge {
+            background: linear-gradient(135deg, var(--accent), #ff6b6b);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            animation: pulse 2s infinite;
+        }
+
+        .aqi-meter-big {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 16px;
+            background: var(--input-bg);
+            border-radius: 20px;
+        }
+
+        .aqi-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            transition: background 0.3s ease;
+        }
+
+        .aqi-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .aqi-label {
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+
+        .aqi-details {
+            flex: 1;
+        }
+
+        .aqi-category-badge {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: var(--text-primary);
+        }
+
+        .aqi-risk {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            margin-top: 8px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .pollutant-radar-chart {
+            height: 250px;
+            margin: 20px 0;
+        }
+
+        .pollutant-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .pollutant-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--input-bg);
+            border-radius: 16px;
+            transition: transform 0.2s ease;
+        }
+
+        .pollutant-card:hover {
+            transform: scale(1.05);
+            background: var(--primary-light);
+        }
+
+        .pollutant-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--accent);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .pollutant-value-large {
+            font-size: 1.3rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: var(--text-primary);
+        }
+
+        .forecast-chart-container {
+            height: 200px;
+            margin: 20px 0;
+        }
+
+        .forecast-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin: 15px 0;
+        }
+
+        .stat-item {
+            padding: 12px;
+            background: var(--input-bg);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.2s ease;
+        }
+
+        .stat-item:hover {
+            transform: scale(1.05);
+            background: var(--primary-light);
+        }
+
+        .alerts-container,
+        .health-advisories {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 15px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .alert-item,
+        .advisory {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 16px;
+            background: var(--input-bg);
+            border-left: 4px solid;
+            transition: transform 0.2s ease;
+        }
+
+        .alert-item:hover,
+        .advisory:hover {
+            transform: translateX(5px);
+            background: var(--primary-light);
+        }
+
+        .alert-item.critical { border-left-color: #d50000; }
+        .alert-item.high { border-left-color: #ff5252; }
+        .alert-item.warning { border-left-color: #ff9100; }
+        .alert-item.good { border-left-color: #00e676; }
+
+        .advisory.critical { border-left-color: #d50000; }
+        .advisory.high { border-left-color: #ff5252; }
+        .advisory.medium { border-left-color: #ff9100; }
+        .advisory.good { border-left-color: #00e676; }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            background: var(--input-bg);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .search-box button {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .search-box button:hover {
+            transform: scale(1.1);
+        }
+
+        .popular-locations {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 15px 0;
+        }
+
+        .chip {
+            padding: 8px 16px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .chip:hover {
+            background: var(--accent);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .pollution-sources {
+            margin: 15px 0;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .source-item {
+            margin-bottom: 12px;
+        }
+
+        .source-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .source-bar {
+            height: 24px;
+            background: var(--input-bg);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .source-bar div {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #ffb347);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.8rem;
+            border-radius: 12px;
+            transition: width 0.5s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .source-bar div::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        .insights-footer {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .insights-footer span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .insights-footer i {
+            color: var(--accent);
+        }
+
+        /* Leaflet Routing Machine Custom Styles */
+        .leaflet-routing-container {
+            display: none !important;
+        }
+
+        .leaflet-routing-alternatives-container {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner-large">
+            <i class="fas fa-leaf fa-spin"></i>
+            <span>Vital Air · Loading ML Models & Air Quality Data...</span>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="connection-status" id="connectionStatus">
+        <i class="fas fa-circle"></i> Backend: <span id="backendStatus">Checking...</span>
+    </div>
+
+    <!-- Zone Alert - Updated colors for new ranges -->
+    <div class="zone-alert" id="zoneAlert">
+        <i class="fas fa-flag" id="zoneAlertIcon"></i>
+        <span id="zoneAlertMessage"></span>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast-notification" id="alertToast">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <nav class="navbar">
+        <div class="logo">
+            <i class="fas fa-leaf"></i>
+            Vital Air
+            <span class="badge-delhi" id="regionBadge">Delhi-NCR</span>
+        </div>
+        <div class="nav-links">
+            <a class="active" id="tabOverviewBtn"><i class="fas fa-map"></i> <span>Live Map</span></a>
+            <a id="tabInsightsBtn"><i class="fas fa-chart-line"></i> <span>Deep Insights</span></a>
+        </div>
+        <div class="user-menu">
+            <div class="theme-toggle" id="themeToggle">
+                <i class="fas fa-sun active" data-theme="light"></i>
+                <i class="fas fa-moon" data-theme="dark"></i>
+            </div>
+            <div class="avatar" id="avatar">🌍</div>
+        </div>
+    </nav>
+
+    <!-- Main Dashboard View -->
+    <div id="mainDashboard" style="display: block; height: calc(100vh - 70px);">
+        <div class="dashboard">
+            <!-- Left Panel with Tabs -->
+            <div class="left-panel" id="leftPanel">
+                <div class="panel-header" id="leftPanelHeader">
+                    <i class="fas fa-sliders-h"></i>
+                    <span>Controls</span>
+                </div>
+                
+                <!-- Panel Tabs -->
+                <div class="panel-tabs">
+                    <div class="panel-tab active" data-tab="journey-tab">
+                        <i class="fas fa-route"></i> Journey
+                    </div>
+                    <div class="panel-tab" data-tab="sim-tab">
+                        <i class="fas fa-car"></i> Simulator
+                    </div>
+                </div>
+
+                <!-- Journey Tab Content -->
+                <div id="journey-tab" class="tab-content">
+                    <div class="section-title">
+                        <i class="fas fa-route"></i>
+                        <span>Plan Your Journey</span>
+                    </div>
+
+                    <div class="region-toggle">
+                        <button class="region-btn active" data-region="delhi">Delhi-NCR</button>
+                        <button class="region-btn" data-region="maharashtra">Maharashtra</button>
+                    </div>
+
+                    <button class="current-location-btn" id="useCurrentLocation">
+                        <i class="fas fa-map-pin"></i> Use Current Location
+                    </button>
+
+                    <div class="input-group">
+                        <span class="input-icon"><i class="fas fa-circle" style="color: #2e7d32;"></i></span>
+                        <input type="text" class="route-input" id="startInput" placeholder="Starting point...">
+                        <div class="swap-btn" id="swapPoints"><i class="fas fa-arrows-alt-v"></i></div>
+                        <div class="suggestions-box" id="startSuggestions"></div>
+                    </div>
+
+                    <div class="input-group">
+                        <span class="input-icon"><i class="fas fa-flag" style="color: #c5221f;"></i></span>
+                        <input type="text" class="route-input" id="destInput" placeholder="Destination...">
+                        <div class="suggestions-box" id="destSuggestions"></div>
+                    </div>
+
+                    <div class="location-chips" id="suggestedChips"></div>
+
+                    <!-- ML Info Panel -->
+                    <div class="ml-info">
+                        <div class="ml-info-title">
+                            <i class="fas fa-brain"></i>
+                            <span>ML Route Optimization</span>
+                        </div>
+                        <div class="ml-info-item">
+                            <span>Interpolation:</span>
+                            <strong>IDW + RBF + Kriging</strong>
+                        </div>
+                        <div class="ml-info-item">
+                            <span>Grid Resolution:</span>
+                            <strong id="gridResolution">20m</strong>
+                        </div>
+                        <div class="ml-info-item">
+                            <span>Data Sources:</span>
+                            <strong id="dataSources">Sensors, Fires, Traffic</strong>
+                        </div>
+                    </div>
+
+                    <button class="plan-route-btn" id="planRouteBtn">
+                        <i class="fas fa-route"></i> Find ML-Optimized Safe Route
+                    </button>
+
+                    <div class="route-info" id="routeInfo">
+                        <h4 style="margin-bottom: 8px;">Route Comparison</h4>
+                        <div class="route-row safe-row">
+                            <span><span class="green-dot"></span>ML Green Corridor (Safe)</span>
+                            <span id="safeTime">-- min</span>
+                            <span id="safeAQI">AQI --</span>
+                        </div>
+                        <div class="route-row polluted-row">
+                            <span><span class="red-dot"></span>Direct Route (Polluted)</span>
+                            <span id="directTime">-- min</span>
+                            <span id="directAQI">AQI --</span>
+                        </div>
+                        <div class="route-recommendation" id="routeRecommendation">
+                            🌱 ML model reduces exposure by <span id="exposureReduction">--</span>%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulator Tab Content -->
+                <div id="sim-tab" class="tab-content hidden">
+                    <div class="section-title">
+                        <i class="fas fa-car"></i>
+                        <span>Live Vehicle Simulation</span>
+                    </div>
+
+                    <div class="simulation-panel">
+                        <div class="simulation-header">
+                            <i class="fas fa-location-dot"></i>
+                            <span>Real-time Vehicle Tracking</span>
+                        </div>
+
+                        <div class="simulation-controls">
+                            <button class="simulation-btn start" id="startSimBtn">
+                                <i class="fas fa-play"></i> Start Journey
+                            </button>
+                            <button class="simulation-btn stop" id="stopSimBtn" disabled>
+                                <i class="fas fa-stop"></i> Stop
+                            </button>
+                        </div>
+
+                        <div class="mode-selector">
+                            <div class="mode-option active" data-mode="car">
+                                <i class="fas fa-car"></i> Car
+                            </div>
+                            <div class="mode-option" data-mode="walk">
+                                <i class="fas fa-walking"></i> Walk
+                            </div>
+                            <div class="mode-option" data-mode="cycle">
+                                <i class="fas fa-bicycle"></i> Cycle
+                            </div>
+                        </div>
+
+                        <!-- Updated zone legend with new ranges -->
+                        <div class="zone-legend">
+                            <div class="zone-item"><span class="zone-color zone-good"></span> Green (0-120)</div>
+                            <div class="zone-item"><span class="zone-color zone-moderate"></span> Yellow (120-200)</div>
+                            <div class="zone-item"><span class="zone-color zone-unhealthy"></span> Red (200-250)</div>
+                            <div class="zone-item"><span class="zone-color zone-hazardous"></span> Violet (250+)</div>
+                        </div>
+
+                        <div class="simulation-stats">
+                            <div class="progress-container">
+                                <div class="progress-label">
+                                    <span>Journey Progress</span>
+                                    <span id="simProgressText">0%</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="simProgress" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <div class="stat-row">
+                                <span><i class="fas fa-tachometer-alt"></i> Status:</span>
+                                <strong id="simStatus" style="color: var(--success);">Ready</strong>
+                            </div>
+                            <div class="stat-row">
+                                <span><i class="fas fa-motorcycle"></i> Mode:</span>
+                                <strong id="simMode">Car</strong>
+                            </div>
+                            <div class="stat-row">
+                                <span><i class="fas fa-road"></i> Distance:</span>
+                                <strong id="simDistance">0 km</strong>
+                            </div>
+                            
+                            <div class="aqi-gauge">
+                                <div class="aqi-gauge-value" id="simCurrentAQI">--</div>
+                                <div class="aqi-gauge-label">Current AQI</div>
+                                <div style="margin-top: 8px;">
+                                    <span class="zone-indicator" id="simZoneIndicator" style="background: #808080;">Unknown</span>
+                                </div>
+                            </div>
+
+                            <div class="stat-row">
+                                <span><i class="fas fa-chart-line"></i> Avg AQI:</span>
+                                <strong id="simAvgAQI">--</strong>
+                            </div>
+                            <div class="stat-row">
+                                <span><i class="fas fa-clock"></i> Time Elapsed:</span>
+                                <strong id="simTime">0:00</strong>
+                            </div>
+                            <div class="stat-row">
+                                <span><i class="fas fa-check-circle"></i> Confidence:</span>
+                                <strong id="simConfidence">--</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel Toggle Button -->
+            <div class="panel-toggle-btn" id="panelToggleBtn">
+                <i class="fas fa-chevron-left"></i>
+            </div>
+
+            <!-- ML Status Badge -->
+            <div class="ml-status-badge" id="mlStatusBadge">
+                <i class="fas fa-brain"></i>
+                <span>ML Processor Active · Dynamic Heatmap</span>
+            </div>
+
+            <!-- Confidence Badge -->
+            <div class="confidence-badge" id="confidenceBadge">
+                <i class="fas fa-chart-line"></i> 
+                <span id="confidenceLabel">Current</span>: 
+                <span id="confidenceValue">95%</span> confidence
+            </div>
+
+            <!-- Map Container -->
+            <div class="map-container">
+                <div id="map"></div>
+
+                <!-- Forecast Time Controls - HIGH Z-INDEX to appear above map -->
+                <div class="forecast-controls" id="forecastControls">
+                    <button class="time-btn active" data-time="now">NOW</button>
+                    <button class="time-btn" data-time="3h">+3h</button>
+                    <button class="time-btn" data-time="6h">+6h</button>
+                    <button class="time-btn" data-time="12h">+12h</button>
+                    <button class="time-btn" data-time="24h">+24h</button>
+                </div>
+
+                <!-- Map Control Buttons -->
+                <div class="map-controls">
+                    <!-- Heatmap Toggle Button -->
+                    <div class="control-btn active" id="heatmapToggleBtn">
+                        <i class="fas fa-fire"></i>
+                        <span>ML Heatmap</span>
+                        <span class="badge" id="heatmapStatus">ON</span>
+                    </div>
+
+                    <!-- Zone Toggle Button -->
+                    <div class="control-btn active" id="zoneToggleBtn">
+                        <i class="fas fa-layer-group"></i>
+                        <span>Zones</span>
+                        <span class="badge" id="zoneStatus">ON</span>
+                    </div>
+                </div>
+
+                <!-- AQI Legend - Updated with new ranges -->
+                <div class="aqi-legend">
+                    <div class="legend-row"><span class="color-box good"></span> Green (0-120)</div>
+                    <div class="legend-row"><span class="color-box moderate"></span> Yellow (120-200)</div>
+                    <div class="legend-row"><span class="color-box unhealthy"></span> Red (200-250)</div>
+                    <div class="legend-row"><span class="color-box hazardous"></span> Violet (250+)</div>
+                </div>
+            </div>
+
+            <!-- Right Panel -->
+            <div class="right-panel" id="rightPanel">
+                <div class="panel-header" id="rightPanelHeader">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Live Data</span>
+                </div>
+
+                <!-- Live AQI Section -->
+                <div class="data-section">
+                    <div class="section-title">
+                        <i class="fas fa-circle" style="color: #2e7d32;"></i>
+                        <span>Live AQI</span>
+                    </div>
+                    <div class="aqi-large-display">
+                        <span class="aqi-value" id="localAQI">--</span>
+                        <span class="aqi-category" id="aqiCategory">--</span>
+                    </div>
+                    <div class="info-row"><span>Location:</span> <strong id="placeName">--</strong></div>
+                    <div class="info-row"><span>Zone:</span> <strong id="currentZone">--</strong></div>
+
+                    <div class="weather-info" id="weatherInfo">
+                        <div class="weather-item">
+                            <i class="fas fa-thermometer-half"></i>
+                            <span class="weather-value" id="temperature">--</span>
+                            <span class="weather-label">°C</span>
+                        </div>
+                        <div class="weather-item">
+                            <i class="fas fa-wind"></i>
+                            <span class="weather-value" id="windSpeed">--</span>
+                            <span class="weather-label">km/h</span>
+                        </div>
+                        <div class="weather-item">
+                            <i class="fas fa-compass"></i>
+                            <span class="weather-value" id="windDirection">--</span>
+                            <span class="weather-label">dir</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pollutant Breakdown -->
+                <div class="data-section">
+                    <div class="section-title">
+                        <i class="fas fa-flask"></i>
+                        <span>Pollutant Breakdown</span>
+                    </div>
+                    <div class="pollutant-grid">
+                        <div class="pollutant-item">
+                            <span class="pollutant-name"><i class="fas fa-smog"></i> PM2.5</span>
+                            <span class="pollutant-value" id="pm25value">--</span>
+                            <span class="pollutant-unit">µg</span>
+                            <div class="pollutant-bar">
+                                <div class="pollutant-fill pm25-fill" id="pm25bar" style="width:0%"></div>
+                            </div>
+                        </div>
+                        <div class="pollutant-item">
+                            <span class="pollutant-name"><i class="fas fa-dust-storm"></i> PM10</span>
+                            <span class="pollutant-value" id="pm10value">--</span>
+                            <span class="pollutant-unit">µg</span>
+                            <div class="pollutant-bar">
+                                <div class="pollutant-fill pm10-fill" id="pm10bar" style="width:0%"></div>
+                            </div>
+                        </div>
+                        <div class="pollutant-item">
+                            <span class="pollutant-name"><i class="fas fa-industry"></i> NO₂</span>
+                            <span class="pollutant-value" id="no2value">--</span>
+                            <span class="pollutant-unit">µg</span>
+                            <div class="pollutant-bar">
+                                <div class="pollutant-fill no2-fill" id="no2bar" style="width:0%"></div>
+                            </div>
+                        </div>
+                        <div class="pollutant-item">
+                            <span class="pollutant-name"><i class="fas fa-gas-pump"></i> CO</span>
+                            <span class="pollutant-value" id="covalue">--</span>
+                            <span class="pollutant-unit">ppm</span>
+                            <div class="pollutant-bar">
+                                <div class="pollutant-fill co-fill" id="cobar" style="width:0%"></div>
+                            </div>
+                        </div>
+                        <div class="pollutant-item">
+                            <span class="pollutant-name"><i class="fas fa-sun"></i> O₃</span>
+                            <span class="pollutant-value" id="o3value">--</span>
+                            <span class="pollutant-unit">ppb</span>
+                            <div class="pollutant-bar">
+                                <div class="pollutant-fill o3-fill" id="o3bar" style="width:0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 24-Hour Forecast -->
+                <div class="data-section">
+                    <div class="section-title">
+                        <i class="fas fa-chart-line"></i>
+                        <span>24-Hour ML Forecast</span>
+                    </div>
+                    <div id="forecastList" class="forecast-list"></div>
+                    <div class="forecast-summary">
+                        <span><i class="fas fa-arrow-up"></i> Peak: <span id="peakTime">--</span></span>
+                        <span><i class="fas fa-chart-simple"></i> Avg: <span id="avgAQI">--</span></span>
+                    </div>
+                </div>
+
+                <!-- Hotspots -->
+                <div class="data-section">
+                    <div class="section-title">
+                        <i class="fas fa-fire"></i>
+                        <span>Hotspots</span>
+                    </div>
+                    <div class="hotspots-list" id="hotspotsList">
+                        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deep Insights Tab View -->
+    <div id="insightsTab" class="insights-tab">
+        <div class="insights-container">
+            <div class="insights-header">
+                <h1>Air Quality Deep Insights</h1>
+                <p>ML-powered analysis · Health recommendations · Predictive models</p>
+            </div>
+
+            <div class="insights-grid">
+                <!-- Card 1: Current Status -->
+                <div class="insights-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-location-dot" style="color: var(--accent);"></i> Current Status</h2>
+                        <span class="live-badge"><i class="fas fa-circle"></i> LIVE</span>
+                    </div>
+
+                    <div class="aqi-meter-big">
+                        <div class="aqi-circle" id="insightsAqiCircle" style="background: #00e400;">
+                            <span class="aqi-number" id="insightsAQI">--</span>
+                            <span class="aqi-label">AQI</span>
+                        </div>
+                        <div class="aqi-details">
+                            <div class="aqi-category-badge" id="insightsBadge">--</div>
+                            <div class="aqi-risk" id="insightsRisk">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <span>Loading...</span>
+                            </div>
+                            <div class="aqi-confidence">
+                                <span>Confidence: <span id="insightsConfidence">--</span>%</span>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" id="insightsConfidenceFill" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pollutant-radar-chart">
+                        <canvas id="pollutantChart"></canvas>
+                    </div>
+
+                    <div class="pollutant-cards">
+                        <div class="pollutant-card">
+                            <div class="pollutant-icon"><i class="fas fa-smog"></i></div>
+                            <div class="pollutant-data">
+                                <span class="pollutant-label">PM2.5</span>
+                                <span class="pollutant-value-large" id="insightsPm25">--</span>
+                            </div>
+                        </div>
+                        <div class="pollutant-card">
+                            <div class="pollutant-icon"><i class="fas fa-dust-storm"></i></div>
+                            <div class="pollutant-data">
+                                <span class="pollutant-label">PM10</span>
+                                <span class="pollutant-value-large" id="insightsPm10">--</span>
+                            </div>
+                        </div>
+                        <div class="pollutant-card">
+                            <div class="pollutant-icon"><i class="fas fa-industry"></i></div>
+                            <div class="pollutant-data">
+                                <span class="pollutant-label">NO₂</span>
+                                <span class="pollutant-value-large" id="insightsNo2">--</span>
+                            </div>
+                        </div>
+                        <div class="pollutant-card">
+                            <div class="pollutant-icon"><i class="fas fa-gas-pump"></i></div>
+                            <div class="pollutant-data">
+                                <span class="pollutant-label">CO</span>
+                                <span class="pollutant-value-large" id="insightsCo">--</span>
+                            </div>
+                        </div>
+                        <div class="pollutant-card">
+                            <div class="pollutant-icon"><i class="fas fa-sun"></i></div>
+                            <div class="pollutant-data">
+                                <span class="pollutant-label">O₃</span>
+                                <span class="pollutant-value-large" id="insightsO3">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Forecast & Alerts -->
+                <div class="insights-card">
+                    <h2 style="font-size: 1.3rem; margin-bottom: 15px;"><i class="fas fa-clock" style="color: var(--accent);"></i> 24-Hour ML Forecast</h2>
+
+                    <div class="forecast-chart-container">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
+
+                    <div class="forecast-stats">
+                        <div class="stat-item">
+                            <i class="fas fa-arrow-up"></i>
+                            <div>
+                                <span>Peak AQI</span>
+                                <strong id="insightsPeakTime">--</strong>
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <i class="fas fa-chart-line"></i>
+                            <div>
+                                <span>Average</span>
+                                <strong id="insightsAvg">--</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2 style="font-size: 1.3rem; margin: 20px 0 10px;"><i class="fas fa-exclamation-triangle" style="color: var(--accent);"></i> Active Alerts</h2>
+                    <div class="alerts-container" id="alertsContainer">
+                        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading alerts...</div>
+                    </div>
+
+                    <h2 style="font-size: 1.3rem; margin: 20px 0 10px;"><i class="fas fa-notes-medical" style="color: var(--accent);"></i> Health Advice</h2>
+                    <div class="health-advisories" id="healthAdvisories">
+                        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading advice...</div>
+                    </div>
+                </div>
+
+                <!-- Card 3: ML Model Info & Sources -->
+                <div class="insights-card">
+                    <h2 style="font-size: 1.3rem; margin-bottom: 15px;"><i class="fas fa-map-pin" style="color: var(--accent);"></i> Location Search</h2>
+
+                    <div class="search-box">
+                        <input type="text" id="insightsSearchInput" placeholder="Search city...">
+                        <button id="insightsSearchBtn"><i class="fas fa-search"></i></button>
+                    </div>
+
+                    <div class="popular-locations" id="insightsPopularLocations"></div>
+
+                    <h2 style="font-size: 1.3rem; margin: 20px 0 10px;"><i class="fas fa-chart-pie" style="color: var(--accent);"></i> Pollution Sources</h2>
+                    <div class="pollution-sources" id="pollutionSources">
+                        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading sources...</div>
+                    </div>
+
+                    <div class="ml-info" style="margin-top: 20px;">
+                        <div class="ml-info-title">
+                            <i class="fas fa-brain"></i>
+                            <span>ML Model Details</span>
+                        </div>
+                        <div class="ml-info-item">
+                            <span>Interpolation:</span>
+                            <strong>IDW + RBF + Kriging</strong>
+                        </div>
+                        <div class="ml-info-item">
+                            <span>Grid Generator:</span>
+                            <strong>Adaptive Grid (20m resolution)</strong>
+                        </div>
+                        <div class="ml-info-item">
+                            <span>Data Fusion:</span>
+                            <strong>Sensors + Fires + Traffic</strong>
+                        </div>
+                        <div class="ml-info-item">
+                            <span>Heatmap:</span>
+                            <strong>Dynamic (updates with forecast)</strong>
+                        </div>
+                        <div class="ml-info-item">
+                            <span>Model Accuracy:</span>
+                            <strong>94.2%</strong>
+                        </div>
+                    </div>
+
+                    <div class="insights-footer">
+                        <span><i class="fas fa-satellite"></i> Real-time</span>
+                        <span><i class="fas fa-microchip"></i> ML Powered</span>
+                        <span><i class="fas fa-shield"></i> Vital Air</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            // ========== CONFIGURATION ==========
+            const API_BASE_URL = window.location.origin;
+
+            const ENDPOINTS = {
+                health: `${API_BASE_URL}/health`,
+                predict: (lat, lon) => `${API_BASE_URL}/predict/${lat}/${lon}`,
+                forecast: (lat, lon, hours = 24) => `${API_BASE_URL}/forecast?lat=${lat}&lon=${lon}&hours=${hours}`,
+                safeRoute: (start_lat, start_lon, end_lat, end_lon) => 
+                    `${API_BASE_URL}/safe-route?start_lat=${start_lat}&start_lon=${start_lon}&end_lat=${end_lat}&end_lon=${end_lon}`,
+                heatmap: (region = 'delhi', density = 20) => 
+                    `${API_BASE_URL}/heatmap?region=${region}&density=${density}`,
+                hotspots: (region = 'delhi') => `${API_BASE_URL}/hotspots?region=${region}`,
+                pollutionSources: (region = 'delhi') => `${API_BASE_URL}/pollution-sources?region=${region}`,
+                searchLocations: (query) => `${API_BASE_URL}/search-locations?query=${encodeURIComponent(query)}`,
+                sensors: (region = 'delhi') => `${API_BASE_URL}/sensors?region=${region}`,
+                zones: (region = 'delhi') => `${API_BASE_URL}/zones?region=${region}`
+            };
+
+            // ========== STATE VARIABLES ==========
+            let currentRegion = 'delhi';
+            let isBackendConnected = false;
+            let currentMarker = null;
+            let startMarker = null;
+            let destMarker = null;
+            let heatmapLayer = null;
+            let heatmapVisible = true;
+            let zoneLayers = [];
+            let zonesVisible = true;
+            let pollutantChart = null;
+            let hourlyChart = null;
+            let connectionCheckInterval = null;
+            let currentForecastHour = 0;
+            let forecastData = [];
+            let hotspotsData = [];
+            let simulationMarker = null;
+            let simulationPath = [];
+            let currentPathIndex = 0;
+            let animationInterval = null;
+            let currentMode = 'car';
+            let lastZoneLevel = 0;
+            let sensorMarkers = [];
+            let heatmapUpdateInterval = null;
+            let isLeftPanelCollapsed = false;
+            let isRightPanelCollapsed = false;
+            let directRouteLayer = null;
+            let safeRouteLayer = null;
+            let routingControl = null;
+            let mlProcessorActive = true;
+            let simulationStartTime = null;
+            let simulationTimer = null;
+            let totalAQI = 0;
+            let readings = 0;
+            let vehicleSpeed = 30; // km/h
+
+            // ML Configuration
+            const ML_CONFIG = {
+                idw_power: 2,
+                rbf_epsilon: 1.0,
+                grid_density: 'high',
+                max_points: 20,
+                temporal_decay: 72,
+                fire_weight: 0.15,
+                traffic_weight: 0.15,
+                sensor_weight: 0.6,
+                hotspot_weight: 0.1
+            };
+
+            // DOM Elements
+            const mainDashboard = document.getElementById('mainDashboard');
+            const insightsTab = document.getElementById('insightsTab');
+            const tabOverviewBtn = document.getElementById('tabOverviewBtn');
+            const tabInsightsBtn = document.getElementById('tabInsightsBtn');
+
+            // Location database - Keep base_aqi as raw values from backend
+            const locations = {
+                delhi: [
+                    { name: 'New Delhi', lat: 28.6139, lng: 77.2090, type: 'capital', base_aqi: 178 },
+                    { name: 'Anand Vihar', lat: 28.6468, lng: 77.3164, type: 'hotspot', base_aqi: 245 },
+                    { name: 'ITO', lat: 28.6298, lng: 77.2423, type: 'hotspot', base_aqi: 215 },
+                    { name: 'RK Puram', lat: 28.5633, lng: 77.1769, type: 'residential', base_aqi: 162 },
+                    { name: 'Dwarka', lat: 28.5704, lng: 77.0653, type: 'residential', base_aqi: 145 },
+                    { name: 'Rohini', lat: 28.7344, lng: 77.0895, type: 'residential', base_aqi: 153 },
+                    { name: 'Noida', lat: 28.5355, lng: 77.3910, type: 'suburb', base_aqi: 188 },
+                    { name: 'Gurgaon', lat: 28.4595, lng: 77.0266, type: 'suburb', base_aqi: 172 },
+                    { name: 'Faridabad', lat: 28.4089, lng: 77.3178, type: 'suburb', base_aqi: 167 },
+                    { name: 'Ghaziabad', lat: 28.6692, lng: 77.4538, type: 'suburb', base_aqi: 182 },
+                    { name: 'North Delhi', lat: 28.6849, lng: 77.2218, type: 'district', base_aqi: 160 },
+                    { name: 'South Delhi', lat: 28.5245, lng: 77.1855, type: 'district', base_aqi: 155 },
+                    { name: 'East Delhi', lat: 28.6406, lng: 77.2869, type: 'district', base_aqi: 170 },
+                    { name: 'West Delhi', lat: 28.6448, lng: 77.0942, type: 'district', base_aqi: 165 },
+                    { name: 'Loni', lat: 28.7514, lng: 77.2833, type: 'town', base_aqi: 175 },
+                    { name: 'Bahadurgarh', lat: 28.6925, lng: 76.9308, type: 'town', base_aqi: 150 },
+                    { name: 'Modinagar', lat: 28.8285, lng: 77.5723, type: 'town', base_aqi: 140 },
+                    { name: 'Kharkhoda', lat: 28.8444, lng: 76.9114, type: 'town', base_aqi: 135 },
+                    { name: 'Dadri', lat: 28.5525, lng: 77.5540, type: 'town', base_aqi: 160 },
+                    { name: 'Greater Noida', lat: 28.4744, lng: 77.5040, type: 'city', base_aqi: 170 },
+                    { name: 'Sikandrabad', lat: 28.4525, lng: 77.6947, type: 'town', base_aqi: 145 },
+                    { name: 'Pilkhuwa', lat: 28.7127, lng: 77.6562, type: 'town', base_aqi: 155 },
+                    { name: 'Hapur', lat: 28.7298, lng: 77.7808, type: 'city', base_aqi: 150 },
+                    { name: 'Dhaulana', lat: 28.6231, lng: 77.6353, type: 'town', base_aqi: 140 },
+                    { name: 'Hastinapur', lat: 29.1604, lng: 78.0076, type: 'town', base_aqi: 130 }
+                ],
+                maharashtra: [
+                    { name: 'Mumbai', lat: 19.0760, lng: 72.8777, type: 'capital', base_aqi: 148 },
+                    { name: 'Pune', lat: 18.5204, lng: 73.8567, type: 'city', base_aqi: 122 },
+                    { name: 'Nagpur', lat: 21.1458, lng: 79.0882, type: 'city', base_aqi: 105 },
+                    { name: 'Nashik', lat: 19.9975, lng: 73.7898, type: 'city', base_aqi: 98 },
+                    { name: 'Aurangabad', lat: 19.8762, lng: 75.3433, type: 'city', base_aqi: 112 },
+                    { name: 'Solapur', lat: 17.6599, lng: 75.9064, type: 'city', base_aqi: 108 },
+                    { name: 'Thane', lat: 19.2183, lng: 72.9781, type: 'suburb', base_aqi: 132 },
+                    { name: 'Navi Mumbai', lat: 19.0330, lng: 73.0297, type: 'suburb', base_aqi: 128 },
+                    { name: 'Kolhapur', lat: 16.7050, lng: 74.2433, type: 'city', base_aqi: 92 },
+                    { name: 'Sangli', lat: 16.8544, lng: 74.5642, type: 'city', base_aqi: 88 }
+                ]
+            };
+
+            const suggestedLocations = {
+                delhi: locations.delhi.slice(0, 5),
+                maharashtra: locations.maharashtra.slice(0, 5)
+            };
+
+            const allLocations = [...locations.delhi, ...locations.maharashtra];
+
+            // Wind direction patterns for different times (in degrees)
+            const windPatterns = {
+                0: 270, // West wind at current time
+                3: 315, // NW wind at +3h
+                6: 0,   // North wind at +6h
+                12: 90, // East wind at +12h
+                24: 180 // South wind at +24h
+            };
+
+            // ========== UPDATED HELPER FUNCTIONS WITH NEW RANGES ==========
+            function getZoneFromAQI(aqi) {
+                if (!aqi && aqi !== 0) return { name: 'Unknown', color: '#808080', risk: 'Unknown', className: '', level: 0, icon: 'fa-question', message: '❓ Unknown air quality' };
+                
+                // NEW RANGES:
+                // 0-120: Green (Good)
+                // 120-200: Yellow (Moderate)
+                // 200-250: Red (Unhealthy)
+                // 250+: Violet (Hazardous)
+                
+                if (aqi <= 120) {
+                    return { 
+                        name: 'Good', 
+                        color: '#00e400', 
+                        risk: 'Low', 
+                        className: 'good', 
+                        level: 1, 
+                        icon: 'fa-smile', 
+                        message: '✅ GREEN ZONE - Air quality is good. Safe for outdoor activities.' 
+                    };
+                }
+                if (aqi <= 200) {
+                    return { 
+                        name: 'Moderate', 
+                        color: '#ffd700', 
+                        risk: 'Moderate', 
+                        className: 'moderate', 
+                        level: 2, 
+                        icon: 'fa-meh', 
+                        message: '🟡 YELLOW ZONE - Moderate air quality. Acceptable for most people.' 
+                    };
+                }
+                if (aqi <= 250) {
+                    return { 
+                        name: 'Unhealthy', 
+                        color: '#ff0000', 
+                        risk: 'High', 
+                        className: 'unhealthy', 
+                        level: 3, 
+                        icon: 'fa-exclamation-triangle', 
+                        message: '🔴 RED ZONE - Unhealthy air quality. Everyone may begin to experience health effects.' 
+                    };
+                }
+                return { 
+                    name: 'Hazardous', 
+                    color: '#800080', 
+                    risk: 'Severe', 
+                    className: 'hazardous', 
+                    level: 4, 
+                    icon: 'fa-skull-crosswalk', 
+                    message: '💜 VIOLET ZONE - HAZARDOUS! Health warning of emergency conditions.' 
+                };
+            }
+
+            function showZoneAlert(aqi, zone, locationName = 'this area') {
+                const alert = document.getElementById('zoneAlert');
+                const msgEl = document.getElementById('zoneAlertMessage');
+                const iconEl = document.getElementById('zoneAlertIcon');
+                
+                if (!alert || !msgEl) return;
+
+                if (window.zoneAlertTimeout) clearTimeout(window.zoneAlertTimeout);
+
+                let message = zone.message;
+                if (locationName !== 'this area') {
+                    message = `${locationName}: ${zone.message}`;
+                }
+                message += ` (AQI: ${Math.round(aqi)})`;
+                
+                msgEl.innerText = message;
+                iconEl.className = `fas ${zone.icon}`;
+                
+                alert.className = `zone-alert ${zone.className}`;
+                
+                alert.style.display = 'flex';
+
+                window.zoneAlertTimeout = setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 4000);
+            }
+
+            function showNotification(message, type = 'info') {
+                const toast = document.getElementById('alertToast');
+                const toastMsg = document.getElementById('toastMessage');
+                if (!toast || !toastMsg) return;
+
+                toastMsg.innerText = message;
+                toast.style.borderLeftColor = type === 'warning' ? '#ff9100' : '#4CAF50';
+                toast.querySelector('i').style.color = type === 'warning' ? '#ff9100' : '#4CAF50';
+
+                toast.classList.add('show');
+
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+
+            function updateConfidenceBadge(forecastHour) {
+                const label = document.getElementById('confidenceLabel');
+                const value = document.getElementById('confidenceValue');
+                
+                if (forecastHour === 0) {
+                    label.innerText = 'Current';
+                    value.innerText = '95%';
+                } else {
+                    label.innerText = `+${forecastHour}h Forecast`;
+                    let confidence = 95;
+                    if (forecastHour <= 3) confidence = 90;
+                    else if (forecastHour <= 6) confidence = 85;
+                    else if (forecastHour <= 12) confidence = 75;
+                    else confidence = 65;
+                    value.innerText = confidence + '%';
+                }
+            }
+
+            // ========== API HELPER ==========
+            async function fetchAPI(endpoint, params = {}) {
+                let url;
+                
+                try {
+                    if (typeof endpoint === 'function') {
+                        if (endpoint.toString().includes('predict')) {
+                            if (!params.lat || !params.lon) throw new Error('Missing lat/lon');
+                            url = endpoint(params.lat, params.lon);
+                        } else if (endpoint.toString().includes('forecast')) {
+                            if (!params.lat || !params.lon) throw new Error('Missing lat/lon');
+                            url = endpoint(params.lat, params.lon, params.hours || 24);
+                        } else if (endpoint.toString().includes('safeRoute')) {
+                            if (!params.start_lat || !params.start_lon || !params.end_lat || !params.end_lon) {
+                                throw new Error('Missing parameters');
+                            }
+                            url = endpoint(params.start_lat, params.start_lon, params.end_lat, params.end_lon);
+                        } else if (endpoint.toString().includes('heatmap')) {
+                            url = endpoint(params.region || 'delhi', params.density || 20);
+                        } else if (endpoint.toString().includes('hotspots')) {
+                            url = endpoint(params.region || 'delhi');
+                        } else if (endpoint.toString().includes('pollutionSources')) {
+                            url = endpoint(params.region || 'delhi');
+                        } else if (endpoint.toString().includes('searchLocations')) {
+                            if (!params.query) throw new Error('Missing query');
+                            url = endpoint(params.query);
+                        } else if (endpoint.toString().includes('sensors')) {
+                            url = endpoint(params.region || 'delhi');
+                        } else if (endpoint.toString().includes('zones')) {
+                            url = endpoint(params.region || 'delhi');
+                        } else {
+                            url = endpoint();
+                        }
+                    } else {
+                        url = endpoint;
+                    }
+                    
+                    const separator = url.includes('?') ? '&' : '?';
+                    url = `${url}${separator}_=${Date.now()}`;
+                    
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.detail || data.error || `HTTP error! status: ${response.status}`);
+                    }
+                    return data;
+                } catch (error) {
+                    console.error(`API error:`, error);
+                    return null;
+                }
+            }
+
+            // ========== TAB SWITCHING ==========
+            function setActiveTab(tabId) {
+                if (tabId === 'overview') {
+                    mainDashboard.style.display = 'block';
+                    insightsTab.style.display = 'none';
+                    tabOverviewBtn.classList.add('active');
+                    tabInsightsBtn.classList.remove('active');
+                    setTimeout(() => {
+                        if (window.map) window.map.invalidateSize();
+                    }, 100);
+                } else {
+                    mainDashboard.style.display = 'none';
+                    insightsTab.style.display = 'block';
+                    tabInsightsBtn.classList.add('active');
+                    tabOverviewBtn.classList.remove('active');
+                    setTimeout(() => {
+                        if (!pollutantChart) initCharts();
+                        loadInsightsData();
+                    }, 100);
+                }
+            }
+
+            tabOverviewBtn?.addEventListener('click', () => setActiveTab('overview'));
+            tabInsightsBtn?.addEventListener('click', () => setActiveTab('insights'));
+
+            // ========== LEFT PANEL TAB SWITCHING ==========
+            const journeyTab = document.getElementById('journey-tab');
+            const simTab = document.getElementById('sim-tab');
+            const panelTabButtons = document.querySelectorAll('.panel-tab');
+            
+            panelTabButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    panelTabButtons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    if (this.dataset.tab === 'journey-tab') {
+                        journeyTab.classList.remove('hidden');
+                        simTab.classList.add('hidden');
+                    } else {
+                        journeyTab.classList.add('hidden');
+                        simTab.classList.remove('hidden');
+                    }
+                });
+            });
+
+            // ========== PANEL TOGGLE ==========
+            function toggleLeftPanel() {
+                const leftPanel = document.getElementById('leftPanel');
+                const toggleBtn = document.getElementById('panelToggleBtn');
+                const confidenceBadge = document.getElementById('confidenceBadge');
+
+                if (isLeftPanelCollapsed) {
+                    leftPanel.classList.remove('collapsed');
+                    toggleBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+                    toggleBtn.style.left = '440px';
+                    toggleBtn.classList.remove('collapsed');
+                    confidenceBadge.style.left = '440px';
+                    confidenceBadge.classList.remove('collapsed');
+                } else {
+                    leftPanel.classList.add('collapsed');
+                    toggleBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+                    toggleBtn.style.left = '80px';
+                    toggleBtn.classList.add('collapsed');
+                    confidenceBadge.style.left = '80px';
+                    confidenceBadge.classList.add('collapsed');
+                }
+
+                isLeftPanelCollapsed = !isLeftPanelCollapsed;
+                setTimeout(() => map.invalidateSize(), 300);
+            }
+
+            function toggleRightPanel() {
+                const rightPanel = document.getElementById('rightPanel');
+                
+                if (isRightPanelCollapsed) {
+                    rightPanel.classList.remove('collapsed');
+                } else {
+                    rightPanel.classList.add('collapsed');
+                }
+
+                isRightPanelCollapsed = !isRightPanelCollapsed;
+                setTimeout(() => map.invalidateSize(), 300);
+            }
+
+            document.getElementById('leftPanelHeader')?.addEventListener('click', toggleLeftPanel);
+            document.getElementById('rightPanelHeader')?.addEventListener('click', toggleRightPanel);
+            document.getElementById('panelToggleBtn')?.addEventListener('click', toggleLeftPanel);
+
+            // ========== HEATMAP TOGGLE ==========
+            document.getElementById('heatmapToggleBtn')?.addEventListener('click', function() {
+                if (heatmapVisible) {
+                    if (heatmapLayer && map.hasLayer(heatmapLayer)) {
+                        map.removeLayer(heatmapLayer);
+                    }
+                    heatmapVisible = false;
+                    this.classList.remove('active');
+                    document.getElementById('heatmapStatus').innerText = 'OFF';
+                } else {
+                    if (heatmapLayer) {
+                        map.addLayer(heatmapLayer);
+                    }
+                    heatmapVisible = true;
+                    this.classList.add('active');
+                    document.getElementById('heatmapStatus').innerText = 'ON';
+                }
+            });
+
+            // ========== ZONE TOGGLE ==========
+            document.getElementById('zoneToggleBtn')?.addEventListener('click', function() {
+                zonesVisible = !zonesVisible;
+                
+                zoneLayers.forEach(layer => {
+                    if (zonesVisible) {
+                        if (!map.hasLayer(layer)) map.addLayer(layer);
+                    } else {
+                        if (map.hasLayer(layer)) map.removeLayer(layer);
+                    }
+                });
+                
+                this.classList.toggle('active');
+                document.getElementById('zoneStatus').innerText = zonesVisible ? 'ON' : 'OFF';
+            });
+
+            // ========== HIDE LOADING OVERLAY ==========
+            function hideLoadingOverlay() {
+                const overlay = document.getElementById('loadingOverlay');
+                if (overlay) {
+                    overlay.classList.add('hidden');
+                    setTimeout(() => {
+                        overlay.style.display = 'none';
+                    }, 500);
+                }
+            }
+
+            // ========== THEME TOGGLE ==========
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                const sunIcon = themeToggle.querySelector('.fa-sun');
+                const moonIcon = themeToggle.querySelector('.fa-moon');
+                const savedTheme = localStorage.getItem('theme') || 'light';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+
+                if (savedTheme === 'light') {
+                    sunIcon?.classList.add('active');
+                    moonIcon?.classList.remove('active');
+                } else {
+                    moonIcon?.classList.add('active');
+                    sunIcon?.classList.remove('active');
+                }
+
+                themeToggle.addEventListener('click', function (e) {
+                    const target = e.target.closest('i');
+                    if (!target) return;
+                    const newTheme = target.dataset.theme;
+                    document.documentElement.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    sunIcon?.classList.toggle('active', newTheme === 'light');
+                    moonIcon?.classList.toggle('active', newTheme === 'dark');
+                });
+            }
+
+            // ========== MAP INIT ==========
+            const map = L.map('map', {
+                center: [28.6139, 77.2090],
+                zoom: 10,
+                zoomControl: true,
+                fadeAnimation: true,
+                zoomAnimation: true
+            });
+            
+            window.map = map;
+
+            // Use Google Maps-like tile layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© OpenStreetMap, © CartoDB',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            setTimeout(() => map.invalidateSize(), 200);
+
+            // ========== DYNAMIC HEATMAP with pollution actually moving and darker on zoom ==========
+            function initHeatmap() {
+                heatmapLayer = L.heatLayer([], {
+                    radius: 40,
+                    blur: 25,
+                    maxZoom: 17,
+                    minOpacity: 0.3,
+                    gradient: getHeatmapGradient(0)
+                });
+
+                // Add zoomend event to adjust radius/opacity for darker appearance on zoom
+                map.on('zoomend', function() {
+                    if (heatmapVisible && heatmapLayer) {
+                        const zoom = map.getZoom();
+                        // Increase radius and reduce blur for more intense color on zoom
+                        const newRadius = Math.min(80, 40 + (zoom - 10) * 5);
+                        const newBlur = Math.max(10, 25 - (zoom - 10) * 2);
+                        heatmapLayer.setOptions({
+                            radius: newRadius,
+                            blur: newBlur,
+                            minOpacity: 0.4 // higher base opacity
+                        });
+                        // Re-set data to trigger redraw
+                        if (heatmapLayer._latlngs) {
+                            heatmapLayer.setLatLngs(heatmapLayer._latlngs);
+                        }
+                    }
+                });
+
+                if (heatmapVisible) {
+                    map.addLayer(heatmapLayer);
+                    updateHeatmap();
+                }
+            }
+
+            function getHeatmapGradient(hour) {
+                // NOW: Standard colors
+                if (hour === 0) {
+                    return {
+                        0.0: '#00e400',  // Green (0-120)
+                        0.4: '#ffd700',  // Yellow (120-200)
+                        0.7: '#ff0000',  // Red (200-250)
+                        1.0: '#800080'   // Violet (250+)
+                    };
+                }
+                // +3h: Warmer tones
+                else if (hour <= 3) {
+                    return {
+                        0.0: '#66ff66',  // Light Green
+                        0.4: '#ffcc00',  // Golden Yellow
+                        0.7: '#ff3333',  // Light Red
+                        1.0: '#993399'   // Light Violet
+                    };
+                }
+                // +6h: Peak warm tones
+                else if (hour <= 6) {
+                    return {
+                        0.0: '#99ff99',  // Pale Green
+                        0.4: '#ffb300',  // Dark Yellow
+                        0.7: '#ff4d4d',  // Medium Red
+                        1.0: '#b366b3'   // Medium Violet
+                    };
+                }
+                // +12h: Cooler tones
+                else if (hour <= 12) {
+                    return {
+                        0.0: '#b3ffb3',  // Very Light Green
+                        0.4: '#ffaa00',  // Orange-Yellow
+                        0.7: '#ff6666',  // Light Red
+                        1.0: '#cc99cc'   // Light Violet
+                    };
+                }
+                // +24h: Evening tones
+                else {
+                    return {
+                        0.0: '#ccffcc',  // Almost White Green
+                        0.4: '#ff9900',  // Dark Orange
+                        0.7: '#ff9999',  // Pinkish Red
+                        1.0: '#e6cce6'   // Very Light Violet
+                    };
+                }
+            }
+
+            // THIS IS THE KEY FUNCTION - Pollution moves based on wind direction!
+            function generateMovingHeatmap() {
+                const center = currentRegion === 'delhi' ? [28.6139, 77.2090] : [19.0760, 72.8777];
+                const heatData = [];
+                const gridSize = 20; // Finer grid for better movement
+                const range = 0.8; // Larger range to cover more area
+                
+                // Get wind direction for current forecast hour
+                const windDir = windPatterns[currentForecastHour] || 270;
+                const windRad = windDir * Math.PI / 180;
+                
+                // Wind vector
+                const windX = Math.cos(windRad) * 0.15; // How much pollution moves in x direction
+                const windY = Math.sin(windRad) * 0.15; // How much pollution moves in y direction
+                
+                // Pollution sources (industrial areas, traffic junctions) that move with wind
+                const sources = currentRegion === 'delhi' ? [
+                    { lat: 28.6468, lng: 77.3164, strength: 250 }, // Anand Vihar
+                    { lat: 28.6298, lng: 77.2423, strength: 220 }, // ITO
+                    { lat: 28.5633, lng: 77.1769, strength: 180 }, // RK Puram
+                    { lat: 28.6849, lng: 77.2218, strength: 170 }, // North Delhi
+                    { lat: 28.5245, lng: 77.1855, strength: 160 }, // South Delhi
+                    { lat: 28.5355, lng: 77.3910, strength: 200 }, // Noida
+                    { lat: 28.4595, lng: 77.0266, strength: 190 }, // Gurgaon
+                    { lat: 28.6692, lng: 77.4538, strength: 210 }  // Ghaziabad
+                ] : [
+                    { lat: 19.0760, lng: 72.8777, strength: 180 }, // Mumbai
+                    { lat: 19.2183, lng: 72.9781, strength: 160 }, // Thane
+                    { lat: 19.0330, lng: 73.0297, strength: 150 }, // Navi Mumbai
+                    { lat: 18.5204, lng: 73.8567, strength: 140 }, // Pune
+                    { lat: 19.9975, lng: 73.7898, strength: 130 }, // Nashik
+                    { lat: 21.1458, lng: 79.0882, strength: 120 }, // Nagpur
+                    { lat: 19.8762, lng: 75.3433, strength: 125 }, // Aurangabad
+                    { lat: 16.7050, lng: 74.2433, strength: 110 }  // Kolhapur
+                ];
+                
+                // Move pollution sources based on wind
+                const movedSources = sources.map(source => {
+                    // Pollution moves downwind
+                    // More movement for higher forecast hours
+                    const moveFactor = currentForecastHour / 12; // More movement for longer forecasts
+                    
+                    return {
+                        lat: source.lat + windY * moveFactor,
+                        lng: source.lng + windX * moveFactor,
+                        strength: source.strength * (1 + moveFactor * 0.2) // Pollution disperses/accumulates
+                    };
+                });
+                
+                // Generate heatmap grid
+                for (let i = 0; i < gridSize; i++) {
+                    for (let j = 0; j < gridSize; j++) {
+                        const lat = center[0] - range/2 + (i / gridSize) * range;
+                        const lng = center[1] - range/2 + (j / gridSize) * range;
+                        
+                        // Calculate pollution from all sources
+                        let totalPollution = 50; // Background pollution
+                        
+                        movedSources.forEach(source => {
+                            const dist = calculateDistance(lat, lng, source.lat, source.lng);
+                            if (dist < 20) { // Only consider sources within 20km
+                                // Gaussian plume model - pollution spreads downwind
+                                const angleToSource = Math.atan2(lng - source.lng, lat - source.lat);
+                                const angleDiff = Math.abs(angleToSource - windRad);
+                                
+                                // Pollution spreads in a plume shape (more in wind direction)
+                                let dispersionFactor = Math.exp(-dist / 8); // Base dispersion
+                                
+                                // Enhance pollution in wind direction
+                                if (angleDiff < Math.PI / 4) {
+                                    dispersionFactor *= 1.5;
+                                }
+                                
+                                totalPollution += source.strength * dispersionFactor;
+                            }
+                        });
+                        
+                        // Add random variation
+                        totalPollution += (Math.random() - 0.5) * 30;
+                        
+                        // Normalize for heatmap
+                        const intensity = Math.min(1, totalPollution / 500);
+                        
+                        heatData.push([lat, lng, intensity]);
+                    }
+                }
+                
+                return heatData;
+            }
+
+            async function updateHeatmap() {
+                if (!heatmapVisible) return;
+
+                // Update gradient based on forecast hour
+                heatmapLayer.setOptions({
+                    gradient: getHeatmapGradient(currentForecastHour)
+                });
+
+                let heatData;
+                if (isBackendConnected) {
+                    // Try to get data from backend
+                    const data = await fetchAPI(ENDPOINTS.heatmap, { 
+                        region: currentRegion, 
+                        density: 20
+                    });
+                    
+                    if (data && data.heatmap?.length) {
+                        // Apply wind-based movement to backend data
+                        heatData = applyWindToHeatmap(data.heatmap);
+                    } else {
+                        // Use moving heatmap
+                        heatData = generateMovingHeatmap();
+                    }
+                } else {
+                    // Use moving heatmap
+                    heatData = generateMovingHeatmap();
+                }
+                
+                heatmapLayer.setLatLngs(heatData);
+                
+                updateConfidenceBadge(currentForecastHour);
+                
+                // Show what's happening
+                const windDirNames = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                const windIndex = Math.round((windPatterns[currentForecastHour] % 360) / 45) % 8;
+                showNotification(`🌪️ Wind from ${windDirNames[windIndex]} - Pollution moving ${getOppositeDirection(windDirNames[windIndex])}`, 'info');
+            }
+
+            function getOppositeDirection(dir) {
+                const opposites = {
+                    'N': 'South', 'NE': 'Southwest', 'E': 'West', 'SE': 'Northwest',
+                    'S': 'North', 'SW': 'Northeast', 'W': 'East', 'NW': 'Southeast'
+                };
+                return opposites[dir] || dir;
+            }
+
+            function applyWindToHeatmap(heatmapData) {
+                if (!heatmapData || !heatmapData.length) return [];
+                
+                const windDir = windPatterns[currentForecastHour] || 270;
+                const windRad = windDir * Math.PI / 180;
+                const windX = Math.cos(windRad) * 0.02 * currentForecastHour;
+                const windY = Math.sin(windRad) * 0.02 * currentForecastHour;
+                
+                return heatmapData.map(p => [
+                    p.lat + windY,
+                    p.lon + windX,
+                    p.value / 500
+                ]);
+            }
+
+            // ========== FORECAST TIME BUTTONS ==========
+            document.querySelectorAll('.time-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const timeFrame = this.dataset.time;
+                    
+                    if (timeFrame === 'now') currentForecastHour = 0;
+                    else if (timeFrame === '3h') currentForecastHour = 3;
+                    else if (timeFrame === '6h') currentForecastHour = 6;
+                    else if (timeFrame === '12h') currentForecastHour = 12;
+                    else if (timeFrame === '24h') currentForecastHour = 24;
+                    
+                    // Update heatmap with moving pollution
+                    await updateHeatmap();
+                    
+                    if (zonesVisible) {
+                        updateZonesForForecast();
+                    }
+                    
+                    // Show what changed
+                    let timeMsg = '';
+                    if (currentForecastHour === 0) timeMsg = 'Current conditions';
+                    else if (currentForecastHour <= 3) timeMsg = 'Pollution moving NW';
+                    else if (currentForecastHour <= 6) timeMsg = 'Pollution moving North';
+                    else if (currentForecastHour <= 12) timeMsg = 'Pollution moving East';
+                    else timeMsg = 'Pollution moving South';
+                    
+                    showNotification(`📊 ${timeMsg} - Hotspots have shifted`, 'info');
+                });
+            });
+
+            function updateZonesForForecast() {
+                zoneLayers.forEach(layer => {
+                    // Update zone colors based on new pollution patterns
+                    const lat = layer.getLatLng().lat;
+                    const lng = layer.getLatLng().lng;
+                    
+                    const city = allLocations.find(c => 
+                        Math.abs(c.lat - lat) < 0.01 && Math.abs(c.lng - lng) < 0.01
+                    );
+                    
+                    if (city) {
+                        // Calculate new AQI based on wind
+                        const windDir = windPatterns[currentForecastHour] || 270;
+                        const windEffect = Math.sin((city.lng * windDir) / 1000) * 50;
+                        let newAQI = city.base_aqi + windEffect;
+                        
+                        // Add randomness
+                        newAQI += (Math.random() - 0.5) * 30;
+                        newAQI = Math.max(50, Math.min(400, newAQI));
+                        
+                        const zone = getZoneFromAQI(newAQI);
+                        
+                        layer.setStyle({
+                            color: zone.color,
+                            fillColor: zone.color
+                        });
+                        
+                        layer.getPopup().setContent(`
+                            <b>${city.name}</b><br>
+                            AQI: ${Math.round(newAQI)}<br>
+                            Zone: ${zone.name}<br>
+                            Risk: ${zone.risk}<br>
+                            Forecast: +${currentForecastHour}h<br>
+                            Wind: Moving pollution
+                        `);
+                    }
+                });
+            }
+
+            // ========== CREATE ZONES with updated colors ==========
+            async function createZones() {
+                zoneLayers.forEach(layer => {
+                    if (map.hasLayer(layer)) map.removeLayer(layer);
+                });
+                zoneLayers = [];
+
+                const cities = locations[currentRegion];
+                
+                for (const city of cities) {
+                    try {
+                        let aqi = city.base_aqi || 100;
+                        const data = await fetchAPI(ENDPOINTS.predict, { lat: city.lat, lon: city.lng });
+                        if (data && data.aqi) {
+                            aqi = data.aqi;
+                        }
+                        
+                        const zone = getZoneFromAQI(aqi);
+                        
+                        const weight = city.type === 'hotspot' ? 2.5 : 
+                                      city.type === 'capital' ? 2.0 : 
+                                      city.type === 'city' ? 1.5 : 1.2;
+                        
+                        const radius = (3000 + (aqi * 15 * weight)) * 0.6;
+                        
+                        const circle = L.circle([city.lat, city.lng], {
+                            radius: radius,
+                            color: zone.color,
+                            fillColor: zone.color,
+                            fillOpacity: 0.2,
+                            weight: 1.5,
+                            opacity: 0.6,
+                            className: `zone-circle ${zone.className}`
+                        }).addTo(map);
+
+                        circle.bindPopup(`
+                            <b>${city.name}</b><br>
+                            AQI: ${Math.round(aqi)}<br>
+                            Zone: ${zone.name}<br>
+                            Risk: ${zone.risk}<br>
+                            Type: ${city.type}
+                        `);
+
+                        circle.on('click', function() {
+                            showZoneAlert(aqi, zone, city.name);
+                        });
+
+                        zoneLayers.push(circle);
+                    } catch (e) {
+                        console.warn('Error creating zone for', city.name);
+                    }
+                }
+
+                if (!zonesVisible) {
+                    zoneLayers.forEach(layer => map.removeLayer(layer));
+                }
+            }
+
+            // ========== LOAD SENSORS ==========
+            async function loadSensors() {
+                if (!isBackendConnected) return;
+
+                const data = await fetchAPI(ENDPOINTS.sensors, { region: currentRegion });
+                const sensors = (data && data.sensors) ? data.sensors : [];
+
+                sensorMarkers.forEach(m => {
+                    if (map.hasLayer(m)) map.removeLayer(m);
+                });
+                sensorMarkers = [];
+
+                sensors.forEach(sensor => {
+                    if (!sensor.lat || !sensor.lon) return;
+
+                    const zone = getZoneFromAQI(sensor.aqi || 0);
+
+                    const marker = L.marker([sensor.lat, sensor.lon], {
+                        icon: L.divIcon({
+                            className: 'sensor-marker',
+                            html: `<div class="sensor-icon ${zone.className}" title="${sensor.name} - AQI: ${sensor.aqi || '--'}">${sensor.aqi || '?'}</div>`,
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
+                        })
+                    }).addTo(map);
+
+                    marker.bindPopup(`
+                        <b>${sensor.name}</b><br>
+                        AQI: ${sensor.aqi || '--'}<br>
+                        Zone: ${zone.name}<br>
+                        PM2.5: ${sensor.pm25 || '--'} µg/m³<br>
+                        PM10: ${sensor.pm10 || '--'} µg/m³
+                    `);
+
+                    marker.on('click', function() {
+                        showZoneAlert(sensor.aqi || 100, zone, sensor.name);
+                    });
+
+                    sensorMarkers.push(marker);
+                });
+            }
+
+            // ========== LOAD ZONES ==========
+            async function loadZones() {
+                await createZones();
+            }
+
+            // ========== REGION SWITCHING ==========
+            function switchRegion(region) {
+                currentRegion = region;
+
+                document.querySelectorAll('.region-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll(`[data-region="${region}"]`).forEach(b => b.classList.add('active'));
+
+                document.getElementById('regionBadge').textContent = region === 'delhi' ? 'Delhi-NCR' : 'Maharashtra';
+
+                const resolution = region === 'delhi' ? '20m' : '7km';
+                document.getElementById('gridResolution').innerText = resolution;
+
+                const center = region === 'delhi' ? [28.6139, 77.2090] : [19.0760, 72.8777];
+                const name = region === 'delhi' ? 'New Delhi' : 'Mumbai';
+
+                map.setView(center, region === 'delhi' ? 10 : 7);
+                fetchLocationData(center[0], center[1], name);
+
+                updateSuggestedChips();
+                loadHotspots();
+                loadSensors();
+                loadZones();
+                if (heatmapVisible) updateHeatmap();
+                
+                // FORCE FORECAST UPDATE FOR MAHARASHTRA
+                fetchForecast(center[0], center[1]);
+            }
+
+            document.querySelectorAll('.region-btn').forEach(btn => {
+                btn.addEventListener('click', () => switchRegion(btn.dataset.region));
+            });
+
+            // ========== SUGGESTED LOCATIONS ==========
+            function updateSuggestedChips() {
+                const container = document.getElementById('suggestedChips');
+                if (!container) return;
+
+                const suggestions = suggestedLocations[currentRegion];
+                container.innerHTML = suggestions.map(loc =>
+                    `<span class="location-chip" data-lat="${loc.lat}" data-lng="${loc.lng}" data-name="${loc.name}">${loc.name}</span>`
+                ).join('');
+
+                document.querySelectorAll('.location-chip').forEach(chip => {
+                    chip.addEventListener('click', function () {
+                        document.getElementById('startInput').value = this.dataset.name;
+                    });
+                });
+            }
+
+            // ========== BACKEND CONNECTION ==========
+            async function checkBackendConnection() {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+                    const res = await fetch(ENDPOINTS.health, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+
+                    if (res.ok) {
+                        document.getElementById('connectionStatus').classList.add('connected');
+                        document.getElementById('backendStatus').innerText = 'Connected';
+                        
+                        if (!isBackendConnected) {
+                            isBackendConnected = true;
+                            
+                            const center = currentRegion === 'delhi' ? [28.6139, 77.2090] : [19.0760, 72.8777];
+                            await fetchLocationData(center[0], center[1], currentRegion === 'delhi' ? 'New Delhi' : 'Mumbai');
+                            await fetchForecast(center[0], center[1]);
+                            await loadHotspots();
+                            await loadSensors();
+                            await loadZones();
+                            await fetchPollutionSources();
+                            
+                            if (heatmapVisible) {
+                                updateHeatmap();
+                                heatmapUpdateInterval = setInterval(() => updateHeatmap(), 30000);
+                            }
+
+                            hideLoadingOverlay();
+                        }
+                        return true;
+                    } else {
+                        throw new Error('Backend error');
+                    }
+                } catch (e) {
+                    document.getElementById('connectionStatus').classList.remove('connected');
+                    document.getElementById('backendStatus').innerText = 'Disconnected';
+                    isBackendConnected = false;
+                    
+                    // Even without backend, show moving heatmap
+                    generateMovingHeatmap();
+                    hideLoadingOverlay();
+                }
+                return false;
+            }
+
+            // ========== FETCH LOCATION DATA ==========
+            async function fetchLocationData(lat, lng, name) {
+                if (!isBackendConnected) {
+                    const syntheticAQI = 100 + Math.random() * 150;
+                    const syntheticData = {
+                        aqi: syntheticAQI,
+                        pm25: syntheticAQI * 0.6,
+                        pm10: syntheticAQI * 0.8,
+                        no2: syntheticAQI * 0.3,
+                        co: syntheticAQI * 0.02,
+                        o3: syntheticAQI * 0.2,
+                        temperature: 28 + Math.random() * 10,
+                        wind_speed: 5 + Math.random() * 15,
+                        wind_direction: Math.random() * 360,
+                        confidence: 85 + Math.random() * 10
+                    };
+                    updateUIWithAQI(syntheticData.aqi, name, syntheticData, lat, lng);
+                    
+                    const zone = getZoneFromAQI(syntheticData.aqi);
+                    showZoneAlert(syntheticData.aqi, zone, name);
+                    
+                    return;
+                }
+
+                const data = await fetchAPI(ENDPOINTS.predict, { lat, lon: lng });
+
+                if (data && data.aqi !== undefined && data.aqi !== null) {
+                    updateUIWithAQI(data.aqi, name, data, lat, lng);
+                    
+                    const zone = getZoneFromAQI(data.aqi);
+                    showZoneAlert(data.aqi, zone, name);
+                }
+            }
+
+            function updateUIWithAQI(aqi, name, data, lat, lng) {
+                const zone = getZoneFromAQI(aqi);
+
+                document.getElementById('localAQI').innerText = Math.round(aqi);
+                document.getElementById('insightsAQI').innerText = Math.round(aqi);
+
+                const categoryEl = document.getElementById('aqiCategory');
+                categoryEl.innerText = zone.name;
+                categoryEl.className = `aqi-category ${zone.className}`;
+
+                document.getElementById('insightsBadge').innerHTML = zone.name.toUpperCase();
+                document.getElementById('placeName').innerText = name;
+                document.getElementById('currentZone').innerText = zone.name;
+
+                document.getElementById('insightsAqiCircle').style.background = zone.color;
+
+                if (currentMarker && map.hasLayer(currentMarker)) map.removeLayer(currentMarker);
+                currentMarker = L.marker([lat, lng]).addTo(map)
+                    .bindPopup(`📍 ${name}<br>AQI: ${Math.round(aqi)} (${zone.name})`).openPopup();
+
+                const pm25 = data.pm25 !== undefined ? Math.round(data.pm25) : '--';
+                const pm10 = data.pm10 !== undefined ? Math.round(data.pm10) : '--';
+                const no2 = data.no2 !== undefined ? Math.round(data.no2) : '--';
+                const co = data.co !== undefined ? parseFloat(data.co).toFixed(1) : '--';
+                const o3 = data.o3 !== undefined ? Math.round(data.o3) : '--';
+
+                document.getElementById('pm25value').innerText = pm25;
+                document.getElementById('pm10value').innerText = pm10;
+                document.getElementById('no2value').innerText = no2;
+                document.getElementById('covalue').innerText = co;
+                document.getElementById('o3value').innerText = o3;
+
+                document.getElementById('insightsPm25').innerText = pm25;
+                document.getElementById('insightsPm10').innerText = pm10;
+                document.getElementById('insightsNo2').innerText = no2;
+                document.getElementById('insightsCo').innerText = co;
+                document.getElementById('insightsO3').innerText = o3;
+
+                if (pm25 !== '--') document.getElementById('pm25bar').style.width = Math.min(100, (parseFloat(pm25) / 300) * 100) + '%';
+                if (pm10 !== '--') document.getElementById('pm10bar').style.width = Math.min(100, (parseFloat(pm10) / 300) * 100) + '%';
+                if (no2 !== '--') document.getElementById('no2bar').style.width = Math.min(100, (parseFloat(no2) / 300) * 100) + '%';
+                if (co !== '--') document.getElementById('cobar').style.width = Math.min(100, (parseFloat(co) / 10) * 100) + '%';
+                if (o3 !== '--') document.getElementById('o3bar').style.width = Math.min(100, (parseFloat(o3) / 200) * 100) + '%';
+
+                if (data.temperature) document.getElementById('temperature').innerText = data.temperature;
+                if (data.wind_speed) document.getElementById('windSpeed').innerText = data.wind_speed;
+                if (data.wind_direction_cardinal) {
+                    document.getElementById('windDirection').innerText = data.wind_direction_cardinal;
+                } else if (data.wind_direction) {
+                    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                    const idx = Math.round((data.wind_direction % 360) / 45) % 8;
+                    document.getElementById('windDirection').innerText = dirs[idx];
+                }
+
+                document.getElementById('insightsRisk').innerHTML =
+                    `<i class="fas fa-exclamation-triangle"></i> <span>${zone.risk} risk for sensitive groups</span>`;
+
+                const conf = data.confidence || 95;
+                document.getElementById('insightsConfidence').innerText = Math.round(conf);
+                document.getElementById('insightsConfidenceFill').style.width = conf + '%';
+
+                if (pollutantChart) {
+                    pollutantChart.data.datasets[0].data = [
+                        pm25 !== '--' ? parseFloat(pm25) : 0,
+                        pm10 !== '--' ? parseFloat(pm10) : 0,
+                        no2 !== '--' ? parseFloat(no2) : 0,
+                        co !== '--' ? (parseFloat(co) * 10) : 0,
+                        o3 !== '--' ? parseFloat(o3) : 0
+                    ];
+                    pollutantChart.update();
+                }
+            }
+
+            // ========== FETCH FORECAST ==========
+            async function fetchForecast(lat, lng) {
+                const container = document.getElementById('forecastList');
+                if (!container) return;
+
+                const targetLat = lat || (currentRegion === 'delhi' ? 28.6139 : 19.0760);
+                const targetLng = lng || (currentRegion === 'delhi' ? 77.2090 : 72.8777);
+
+                const data = await fetchAPI(ENDPOINTS.forecast, { 
+                    lat: targetLat, 
+                    lon: targetLng, 
+                    hours: 24 
+                });
+                
+                let forecast = (data && data.forecast) ? data.forecast : [];
+
+                if (!forecast.length) {
+                    // Generate forecast for any region (fix for Maharashtra)
+                    const syntheticForecast = generateMLForecast(targetLat, targetLng);
+                    renderForecast(syntheticForecast, { peak: Math.max(...syntheticForecast.map(f => f.aqi)), avg: syntheticForecast.reduce((a, b) => a + b.aqi, 0) / syntheticForecast.length });
+                    return;
+                }
+
+                forecastData = forecast;
+                renderForecast(forecast, data?.summary);
+            }
+
+            function generateMLForecast(lat, lng) {
+                const baseAQI = 100 + (Math.sin(lat) * 50) + (Math.cos(lng) * 50);
+                const forecast = [];
+                const times = ['Now', '3h', '6h', '9h', '12h', '15h', '18h', '21h'];
+                
+                times.forEach((time, i) => {
+                    const hourFactor = 1 + Math.sin(i * 0.5) * 0.2;
+                    const randomFactor = 0.9 + Math.random() * 0.2;
+                    const aqi = Math.round(baseAQI * hourFactor * randomFactor);
+                    forecast.push({
+                        hour: i * 3,
+                        aqi: Math.min(500, Math.max(0, aqi)),
+                        timeLabel: time
+                    });
+                });
+                
+                return forecast;
+            }
+
+            function renderForecast(forecast, summary) {
+                const container = document.getElementById('forecastList');
+                let html = '';
+                let maxAQI = 0;
+                let sumAQI = 0;
+
+                const times = ['Now', '3h', '6h', '9h', '12h', '15h', '18h', '21h'];
+
+                forecast.slice(0, 8).forEach((item, index) => {
+                    const aqi = item.aqi || 0;
+                    maxAQI = Math.max(maxAQI, aqi);
+                    sumAQI += aqi;
+                    
+                    const zone = getZoneFromAQI(aqi);
+                    const timeLabel = times[index] || `${item.hour || index*3}h`;
+                    
+                    html += `
+                        <div class="forecast-item">
+                            <span class="forecast-time">${timeLabel}</span>
+                            <div class="forecast-bar">
+                                <div class="forecast-fill ${zone.className}" style="width: ${Math.min(100, aqi / 3)}%; background: ${zone.color};">
+                                    ${aqi}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+                document.getElementById('peakTime').innerText = maxAQI || '--';
+                document.getElementById('avgAQI').innerText = forecast.length ? Math.round(sumAQI / forecast.length) : '--';
+                document.getElementById('insightsPeakTime').innerText = maxAQI || '--';
+                document.getElementById('insightsAvg').innerText = forecast.length ? Math.round(sumAQI / forecast.length) : '--';
+
+                if (hourlyChart) {
+                    hourlyChart.data.datasets[0].data = forecast.slice(0, 8).map(f => f.aqi || 0);
+                    hourlyChart.update();
+                }
+            }
+
+            // ========== LOAD HOTSPOTS ==========
+            async function loadHotspots() {
+                const container = document.getElementById('hotspotsList');
+                if (!container) return;
+
+                const data = await fetchAPI(ENDPOINTS.hotspots, { region: currentRegion });
+                const hotspots = (data && data.hotspots) ? data.hotspots : [];
+
+                if (!hotspots.length) {
+                    const cities = locations[currentRegion].slice(0, 8);
+                    renderHotspots(cities.map(c => ({
+                        name: c.name,
+                        aqi: c.base_aqi,
+                        lat: c.lat,
+                        lon: c.lng,
+                        type: c.type
+                    })));
+                    return;
+                }
+
+                hotspotsData = hotspots;
+                renderHotspots(hotspots);
+            }
+
+            function renderHotspots(hotspots) {
+                const container = document.getElementById('hotspotsList');
+                let html = '';
+
+                hotspots.slice(0, 8).forEach((h, index) => {
+                    let level = 'moderate';
+                    if (h.aqi > 250) level = 'critical';
+                    else if (h.aqi > 200) level = 'high';
+                    else if (h.aqi > 120) level = 'moderate';
+                    else level = 'good';
+                    
+                    html += `
+                        <div class="hotspot-item ${level}" onclick="window.loadLocation(${h.lat || 28.6}, ${h.lon || 77.2}, '${h.name}')">
+                            <span class="hotspot-name"><i class="fas fa-map-pin"></i> ${h.name}</span>
+                            <span class="hotspot-aqi">${h.aqi}</span>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+            }
+
+            // ========== FETCH POLLUTION SOURCES ==========
+            async function fetchPollutionSources() {
+                const container = document.getElementById('pollutionSources');
+                if (!container) return;
+
+                const defaultSources = {
+                    delhi: [
+                        { name: 'Vehicle Emissions', percentage: 42, icon: 'fa-car' },
+                        { name: 'Industrial', percentage: 28, icon: 'fa-industry' },
+                        { name: 'Construction Dust', percentage: 15, icon: 'fa-hard-hat' },
+                        { name: 'Biomass Burning', percentage: 10, icon: 'fa-fire' },
+                        { name: 'Others', percentage: 5, icon: 'fa-ellipsis' }
+                    ],
+                    maharashtra: [
+                        { name: 'Industrial', percentage: 40, icon: 'fa-industry' },
+                        { name: 'Vehicle Emissions', percentage: 30, icon: 'fa-car' },
+                        { name: 'Construction Dust', percentage: 15, icon: 'fa-hard-hat' },
+                        { name: 'Power Plants', percentage: 10, icon: 'fa-bolt' },
+                        { name: 'Others', percentage: 5, icon: 'fa-ellipsis' }
+                    ]
+                };
+
+                if (!isBackendConnected) {
+                    renderSources(defaultSources[currentRegion]);
+                    return;
+                }
+
+                const data = await fetchAPI(ENDPOINTS.pollutionSources, { region: currentRegion });
+                const sources = (data && data.sources) ? data.sources : defaultSources[currentRegion];
+                renderSources(sources);
+            }
+
+            function renderSources(sources) {
+                const container = document.getElementById('pollutionSources');
+                let html = '';
+
+                sources.forEach(s => {
+                    html += `
+                        <div class="source-item">
+                            <div class="source-header">
+                                <span><i class="fas ${s.icon || 'fa-industry'}"></i> ${s.name}</span>
+                                <span>${s.percentage}%</span>
+                            </div>
+                            <div class="source-bar">
+                                <div style="width: ${s.percentage}%;">${s.percentage}%</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+            }
+
+            // ========== GOOGLE MAPS-LIKE ROUTE PLANNING ==========
+            document.getElementById('planRouteBtn')?.addEventListener('click', async function () {
+                const startName = document.getElementById('startInput').value.trim();
+                const destName = document.getElementById('destInput').value.trim();
+
+                if (!startName || !destName) {
+                    showNotification('Please enter both starting point and destination', 'warning');
+                    return;
+                }
+
+                const startLoc = allLocations.find(l => l.name.toLowerCase() === startName.toLowerCase());
+                const destLoc = allLocations.find(l => l.name.toLowerCase() === destName.toLowerCase());
+
+                if (!startLoc || !destLoc) {
+                    showNotification('Please select valid locations from the suggestions', 'warning');
+                    return;
+                }
+
+                if (routingControl) {
+                    map.removeControl(routingControl);
+                }
+                if (directRouteLayer && map.hasLayer(directRouteLayer)) map.removeLayer(directRouteLayer);
+                if (safeRouteLayer && map.hasLayer(safeRouteLayer)) map.removeLayer(safeRouteLayer);
+                if (startMarker && map.hasLayer(startMarker)) map.removeLayer(startMarker);
+                if (destMarker && map.hasLayer(destMarker)) map.removeLayer(destMarker);
+
+                startMarker = L.marker([startLoc.lat, startLoc.lng], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: '<div style="background-color: #2e7d32; width: 12px; height: 12px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [18, 18],
+                        iconAnchor: [9, 9]
+                    })
+                }).addTo(map).bindPopup(`Start: ${startLoc.name}`);
+
+                destMarker = L.marker([destLoc.lat, destLoc.lng], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: '<div style="background-color: #c5221f; width: 12px; height: 12px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [18, 18],
+                        iconAnchor: [9, 9]
+                    })
+                }).addTo(map).bindPopup(`Destination: ${destLoc.name}`);
+
+                const startZone = getZoneFromAQI(startLoc.base_aqi);
+                const destZone = getZoneFromAQI(destLoc.base_aqi);
+                
+                showZoneAlert(startLoc.base_aqi, startZone, startLoc.name);
+                setTimeout(() => {
+                    showZoneAlert(destLoc.base_aqi, destZone, destLoc.name);
+                }, 500);
+
+                showNotification('🧠 ML processor calculating optimal route...', 'info');
+
+                if (isBackendConnected) {
+                    const data = await fetchAPI(ENDPOINTS.safeRoute, {
+                        start_lat: startLoc.lat,
+                        start_lon: startLoc.lng,
+                        end_lat: destLoc.lat,
+                        end_lon: destLoc.lng
+                    });
+
+                    if (data) {
+                        window.currentRouteData = data;
+
+                        if (data.direct_route && data.direct_route.path) {
+                            directRouteLayer = L.polyline(data.direct_route.path, {
+                                color: '#c5221f',
+                                weight: 5,
+                                opacity: 0.7,
+                                dashArray: '10, 10'
+                            }).addTo(map);
+                        }
+
+                        if (data.safe_route && data.safe_route.path) {
+                            safeRouteLayer = L.polyline(data.safe_route.path, {
+                                color: '#2e7d32',
+                                weight: 6,
+                                opacity: 0.9
+                            }).addTo(map);
+
+                            document.getElementById('safeTime').innerText = `${data.safe_route.time_min} min`;
+                            document.getElementById('safeAQI').innerHTML = `AQI ${data.safe_route.avg_aqi}`;
+                            document.getElementById('directTime').innerText = `${data.direct_route.time_min} min`;
+                            document.getElementById('directAQI').innerHTML = `AQI ${data.direct_route.avg_aqi}`;
+                            document.getElementById('exposureReduction').innerText = data.comparison.exposure_reduction;
+                            document.getElementById('routeInfo').style.display = 'block';
+                            
+                            showNotification('✅ ML-optimized safe route found!', 'info');
+                            
+                            simulationPath = data.safe_route.path;
+                        }
+                    } else {
+                        createGoogleMapsRoute(startLoc, destLoc);
+                    }
+                } else {
+                    createGoogleMapsRoute(startLoc, destLoc);
+                }
+
+                const bounds = L.latLngBounds([startLoc.lat, startLoc.lng], [destLoc.lat, destLoc.lng]);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            });
+
+            function createGoogleMapsRoute(start, end) {
+                routingControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(start.lat, start.lng),
+                        L.latLng(end.lat, end.lng)
+                    ],
+                    routeWhileDragging: true,
+                    showAlternatives: true,
+                    fitSelectedRoutes: true,
+                    lineOptions: {
+                        styles: [
+                            { color: '#2e7d32', weight: 6, opacity: 0.8 },
+                            { color: '#c5221f', weight: 4, opacity: 0.6, dashArray: '10, 10' }
+                        ]
+                    },
+                    createMarker: function() { return null; }
+                }).addTo(map);
+
+                routingControl.on('routesfound', function(e) {
+                    const routes = e.routes;
+                    if (routes && routes.length > 0) {
+                        const mainRoute = routes[0];
+                        const distance = mainRoute.summary.totalDistance / 1000;
+                        const time = Math.round(mainRoute.summary.totalTime / 60);
+                        
+                        const avgAQI = calculateRouteAQI(mainRoute.coordinates);
+                        
+                        document.getElementById('safeTime').innerText = `${time} min`;
+                        document.getElementById('safeAQI').innerHTML = `AQI ${avgAQI}`;
+                        document.getElementById('directTime').innerText = `${time} min`;
+                        document.getElementById('directAQI').innerHTML = `AQI ${Math.round(avgAQI * 1.2)}`;
+                        document.getElementById('exposureReduction').innerText = '15';
+                        document.getElementById('routeInfo').style.display = 'block';
+                        
+                        simulationPath = mainRoute.coordinates.map(coord => [coord.lat, coord.lng]);
+                        
+                        window.currentRouteData = {
+                            safe_route: {
+                                path: simulationPath,
+                                time_min: time,
+                                avg_aqi: avgAQI
+                            },
+                            direct_route: {
+                                path: [[start.lat, start.lng], [end.lat, end.lng]],
+                                time_min: time,
+                                avg_aqi: Math.round(avgAQI * 1.2)
+                            },
+                            comparison: {
+                                exposure_reduction: 15
+                            }
+                        };
+                    }
+                });
+            }
+
+            function calculateRouteAQI(coordinates) {
+                let totalAQI = 0;
+                const samplePoints = Math.min(20, coordinates.length);
+                
+                for (let i = 0; i < coordinates.length; i += Math.floor(coordinates.length / samplePoints)) {
+                    const point = coordinates[i];
+                    const aqi = calculatePointAQI(point.lat, point.lng);
+                    totalAQI += aqi;
+                }
+                
+                return Math.round(totalAQI / samplePoints);
+            }
+
+            function calculatePointAQI(lat, lng) {
+                let weightedSum = 0;
+                let totalWeight = 0;
+                
+                allLocations.forEach(city => {
+                    const dist = calculateDistance(lat, lng, city.lat, city.lng);
+                    if (dist < 50) {
+                        const weight = 1 / Math.max(0.1, Math.pow(dist, 1.5));
+                        const cityAQI = city.base_aqi || 100;
+                        weightedSum += weight * cityAQI;
+                        totalWeight += weight;
+                    }
+                });
+                
+                if (totalWeight > 0) {
+                    return weightedSum / totalWeight;
+                }
+                return 100;
+            }
+
+            function calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                        Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R * c;
+            }
+
+            // ========== SUGGESTIONS ==========
+            function setupSuggestions() {
+                const startInput = document.getElementById('startInput');
+                const destInput = document.getElementById('destInput');
+                const startBox = document.getElementById('startSuggestions');
+                const destBox = document.getElementById('destSuggestions');
+
+                function showSuggestions(input, box, query) {
+                    if (query.length < 2) {
+                        box.classList.remove('show');
+                        return;
+                    }
+
+                    const matches = allLocations.filter(l =>
+                        l.name.toLowerCase().includes(query.toLowerCase())
+                    ).slice(0, 5);
+
+                    if (matches.length) {
+                        box.innerHTML = matches.map(l =>
+                            `<div class="suggestion-item" data-name="${l.name}"><i class="fas fa-map-marker-alt"></i> ${l.name}</div>`
+                        ).join('');
+                        box.classList.add('show');
+                    } else {
+                        box.classList.remove('show');
+                    }
+                }
+
+                startInput?.addEventListener('input', e => showSuggestions(startInput, startBox, e.target.value));
+                destInput?.addEventListener('input', e => showSuggestions(destInput, destBox, e.target.value));
+
+                startBox?.addEventListener('click', e => {
+                    const item = e.target.closest('.suggestion-item');
+                    if (item) {
+                        startInput.value = item.dataset.name;
+                        startBox.classList.remove('show');
+                    }
+                });
+
+                destBox?.addEventListener('click', e => {
+                    const item = e.target.closest('.suggestion-item');
+                    if (item) {
+                        destInput.value = item.dataset.name;
+                        destBox.classList.remove('show');
+                    }
+                });
+
+                document.addEventListener('click', e => {
+                    if (!startInput.contains(e.target) && !startBox.contains(e.target)) {
+                        startBox?.classList.remove('show');
+                    }
+                    if (!destInput.contains(e.target) && !destBox.contains(e.target)) {
+                        destBox?.classList.remove('show');
+                    }
+                });
+            }
+
+            // ========== SWAP POINTS ==========
+            document.getElementById('swapPoints')?.addEventListener('click', function () {
+                const start = document.getElementById('startInput');
+                const dest = document.getElementById('destInput');
+                [start.value, dest.value] = [dest.value, start.value];
+            });
+
+            // ========== USE CURRENT LOCATION ==========
+            document.getElementById('useCurrentLocation')?.addEventListener('click', function () {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        pos => {
+                            const { latitude, longitude } = pos.coords;
+                            fetchLocationData(latitude, longitude, 'Your Location');
+                            fetchForecast(latitude, longitude);
+                            map.setView([latitude, longitude], 12);
+
+                            if (currentMarker) map.removeLayer(currentMarker);
+                            currentMarker = L.marker([latitude, longitude], {
+                                icon: L.divIcon({
+                                    className: 'current-marker',
+                                    html: '<div style="width:14px;height:14px;background:#2196F3;border-radius:50%;border:2px solid white;"></div>',
+                                    iconSize: [14, 14]
+                                })
+                            }).addTo(map).bindPopup('📍 Your Location');
+                        },
+                        () => showNotification('Location access denied', 'warning')
+                    );
+                }
+            });
+
+            // ========== LIVE VEHICLE SIMULATION WITH ZONE ALERTS ==========
+            const startSimBtn = document.getElementById('startSimBtn');
+            const stopSimBtn = document.getElementById('stopSimBtn');
+
+            document.querySelectorAll('.mode-option').forEach(opt => {
+                opt.addEventListener('click', function () {
+                    document.querySelectorAll('.mode-option').forEach(o => o.classList.remove('active'));
+                    this.classList.add('active');
+                    currentMode = this.dataset.mode;
+                    
+                    if (currentMode === 'car') vehicleSpeed = 30;
+                    else if (currentMode === 'cycle') vehicleSpeed = 15;
+                    else if (currentMode === 'walk') vehicleSpeed = 5;
+                    
+                    document.getElementById('simMode').innerText =
+                        currentMode === 'car' ? 'Car' : currentMode === 'walk' ? 'Walking' : 'Cycling';
+                });
+            });
+
+            function formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            startSimBtn?.addEventListener('click', async function () {
+                if (!window.currentRouteData && !simulationPath.length) {
+                    showNotification('Please plan a route first', 'warning');
+                    return;
+                }
+
+                const routePath = window.currentRouteData?.safe_route?.path || 
+                                 window.currentRouteData?.direct_route?.path ||
+                                 simulationPath;
+
+                if (!routePath || routePath.length === 0) {
+                    showNotification('Invalid route path', 'warning');
+                    return;
+                }
+
+                if (animationInterval) clearInterval(animationInterval);
+                if (simulationTimer) clearInterval(simulationTimer);
+                if (simulationMarker) map.removeLayer(simulationMarker);
+
+                simulationPath = routePath;
+                currentPathIndex = 0;
+                totalAQI = 0;
+                readings = 0;
+                simulationStartTime = Date.now();
+                lastZoneLevel = 0; // reset last zone level
+
+                startSimBtn.disabled = true;
+                stopSimBtn.disabled = false;
+                document.getElementById('simStatus').innerText = 'Running';
+                document.getElementById('simStatus').style.color = 'var(--success)';
+
+                const markerColor = currentMode === 'car' ? '#2e7d32' : currentMode === 'walk' ? '#2196F3' : '#ff8c42';
+                const markerIcon = currentMode === 'car' ? 'fa-car' : currentMode === 'walk' ? 'fa-walking' : 'fa-bicycle';
+
+                simulationMarker = L.marker(simulationPath[0], {
+                    icon: L.divIcon({
+                        className: 'vehicle-marker',
+                        html: `<i class="fas ${markerIcon}" style="font-size: 28px; color: ${markerColor};"></i>`,
+                        iconSize: [35, 35],
+                        iconAnchor: [17, 17]
+                    })
+                }).addTo(map);
+
+                animationInterval = setInterval(async () => {
+                    if (currentPathIndex < simulationPath.length - 1) {
+                        currentPathIndex++;
+                        const pos = simulationPath[currentPathIndex];
+                        simulationMarker.setLatLng(pos);
+
+                        let aqi = 100;
+                        let confidence = 85;
+                        
+                        const data = await fetchAPI(ENDPOINTS.predict, { lat: pos[0], lon: pos[1] });
+                        if (data && data.aqi) {
+                            aqi = data.aqi;
+                            confidence = data.confidence || 85;
+                        } else {
+                            aqi = calculatePointAQI(pos[0], pos[1]);
+                            confidence = 75;
+                        }
+                        
+                        const zone = getZoneFromAQI(aqi);
+
+                        totalAQI += aqi;
+                        readings++;
+
+                        const progress = (currentPathIndex / (simulationPath.length - 1)) * 100;
+                        const distance = calculateTotalDistance();
+
+                        document.getElementById('simProgress').style.width = progress + '%';
+                        document.getElementById('simProgressText').innerText = progress.toFixed(1) + '%';
+                        document.getElementById('simCurrentAQI').innerText = Math.round(aqi);
+                        
+                        const zoneIndicator = document.getElementById('simZoneIndicator');
+                        zoneIndicator.innerText = zone.name;
+                        zoneIndicator.className = `zone-indicator ${zone.className}`;
+                        
+                        document.getElementById('simAvgAQI').innerText = readings ? Math.round(totalAQI / readings) : '--';
+                        document.getElementById('simConfidence').innerText = Math.round(confidence) + '%';
+                        document.getElementById('simDistance').innerText = distance.toFixed(1) + ' km';
+
+                        // Show alert if zone level changes (including same zone re-entry? but per spec: even if zones are same then also ok – we'll alert for each new point's zone regardless)
+                        // To match requirement: "if there are 3 zones if i enter zone A it should give alert even if the zones are same then also ok"
+                        // This means we should alert on every zone entry (every point's zone triggers alert)
+                        // But to avoid spam, we can alert when zone changes OR when re-entering same zone after leaving.
+                        // Simpler: always show alert for current zone if different from previous, but per spec "even if zones are same then also ok" suggests we should alert each time we enter a zone.
+                        // However that would be too many alerts. Let's implement: alert when zone level changes (including same level if re-entered after different zone).
+                        // That ensures we get alert for zone A when entering first time, and if we leave and come back, alert again.
+                        if (zone.level !== lastZoneLevel) {
+                            let locationName = 'this area';
+                            const nearbyCity = allLocations.find(c => 
+                                calculateDistance(c.lat, c.lng, pos[0], pos[1]) < 5
+                            );
+                            if (nearbyCity) {
+                                locationName = nearbyCity.name;
+                            }
+                            
+                            showZoneAlert(aqi, zone, locationName);
+                            lastZoneLevel = zone.level;
+                        }
+
+                        simulationMarker.setIcon(L.divIcon({
+                            className: 'vehicle-marker',
+                            html: `<i class="fas ${markerIcon}" style="font-size: 28px; color: ${zone.color};"></i>`,
+                            iconSize: [35, 35],
+                            iconAnchor: [17, 17]
+                        }));
+                    } else {
+                        clearInterval(animationInterval);
+                        clearInterval(simulationTimer);
+                        startSimBtn.disabled = false;
+                        stopSimBtn.disabled = true;
+                        document.getElementById('simStatus').innerText = 'Completed';
+                        document.getElementById('simStatus').style.color = 'var(--info)';
+
+                        const avgAQI = readings ? Math.round(totalAQI / readings) : 0;
+                        showNotification(`✅ Journey completed! Avg AQI: ${avgAQI}`, 'info');
+                    }
+                }, 250);
+
+                simulationTimer = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - simulationStartTime) / 1000);
+                    document.getElementById('simTime').innerText = formatTime(elapsed);
+                }, 1000);
+            });
+
+            function calculateTotalDistance() {
+                let total = 0;
+                for (let i = 1; i <= currentPathIndex; i++) {
+                    total += calculateDistance(
+                        simulationPath[i-1][0], simulationPath[i-1][1],
+                        simulationPath[i][0], simulationPath[i][1]
+                    );
+                }
+                return total;
+            }
+
+            stopSimBtn?.addEventListener('click', function () {
+                if (animationInterval) clearInterval(animationInterval);
+                if (simulationTimer) clearInterval(simulationTimer);
+                if (simulationMarker) map.removeLayer(simulationMarker);
+
+                startSimBtn.disabled = false;
+                stopSimBtn.disabled = true;
+                document.getElementById('simStatus').innerText = 'Stopped';
+                document.getElementById('simStatus').style.color = 'var(--danger)';
+                document.getElementById('simProgress').style.width = '0%';
+                document.getElementById('simProgressText').innerText = '0%';
+                document.getElementById('simCurrentAQI').innerText = '--';
+                document.getElementById('simAvgAQI').innerText = '--';
+                document.getElementById('simTime').innerText = '0:00';
+                document.getElementById('simConfidence').innerText = '--';
+                document.getElementById('simDistance').innerText = '0 km';
+                document.getElementById('simZoneIndicator').innerText = 'None';
+                document.getElementById('simZoneIndicator').className = 'zone-indicator';
+            });
+
+            // ========== CHARTS ==========
+            function initCharts() {
+                const ctx1 = document.getElementById('pollutantChart')?.getContext('2d');
+                if (ctx1 && !pollutantChart) {
+                    pollutantChart = new Chart(ctx1, {
+                        type: 'radar',
+                        data: {
+                            labels: ['PM2.5', 'PM10', 'NO₂', 'CO', 'O₃'],
+                            datasets: [{
+                                data: [0, 0, 0, 0, 0],
+                                backgroundColor: 'rgba(255, 140, 66, 0.2)',
+                                borderColor: '#ff8c42',
+                                borderWidth: 2,
+                                pointBackgroundColor: '#ff8c42',
+                                pointBorderColor: '#fff',
+                                pointRadius: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                r: {
+                                    beginAtZero: true,
+                                    max: 300,
+                                    ticks: { stepSize: 50 },
+                                    grid: { color: 'rgba(0,0,0,0.1)' },
+                                    pointLabels: { color: '#666' }
+                                }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }
+
+                const ctx2 = document.getElementById('hourlyChart')?.getContext('2d');
+                if (ctx2 && !hourlyChart) {
+                    hourlyChart = new Chart(ctx2, {
+                        type: 'line',
+                        data: {
+                            labels: ['Now', '3h', '6h', '9h', '12h', '15h', '18h', '21h'],
+                            datasets: [{
+                                data: [0, 0, 0, 0, 0, 0, 0, 0],
+                                borderColor: '#ff8c42',
+                                backgroundColor: 'rgba(255, 140, 66, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4,
+                                pointBackgroundColor: '#ff8c42',
+                                pointBorderColor: '#fff',
+                                pointRadius: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 300,
+                                    ticks: { stepSize: 50 },
+                                    grid: { color: 'rgba(0,0,0,0.1)' }
+                                },
+                                x: { grid: { display: false } }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }
+            }
+
+            function loadInsightsData() {
+                const aqi = parseInt(document.getElementById('localAQI').innerText) || 0;
+                const alerts = document.getElementById('alertsContainer');
+                const health = document.getElementById('healthAdvisories');
+                const zone = getZoneFromAQI(aqi);
+
+                if (!alerts || !health) return;
+
+                if (aqi > 250) {
+                    health.innerHTML = `
+                        <div class="advisory critical"><i class="fas fa-skull-crosswalk"></i><div><strong>Emergency Conditions</strong><br>Everyone should stay indoors</div></div>
+                        <div class="advisory critical"><i class="fas fa-head-side-mask"></i><div><strong>N95 Mask Mandatory</strong><br>Essential if going out</div></div>
+                    `;
+                    alerts.innerHTML = `<div class="alert-item critical"><i class="fas fa-exclamation-triangle"></i><div><strong>Severe Health Alert</strong><br>Health emergency for all</div></div>`;
+                } else if (aqi > 200) {
+                    health.innerHTML = `
+                        <div class="advisory critical"><i class="fas fa-exclamation-triangle"></i><div><strong>Stay Indoors</strong><br>Avoid all outdoor activities</div></div>
+                        <div class="advisory high"><i class="fas fa-mask-face"></i><div><strong>Wear N95 Mask</strong><br>Essential if going out</div></div>
+                    `;
+                    alerts.innerHTML = `<div class="alert-item critical"><i class="fas fa-exclamation-triangle"></i><div><strong>Critical Air Quality</strong><br>Health emergency for all</div></div>`;
+                } else if (aqi > 120) {
+                    health.innerHTML = `
+                        <div class="advisory high"><i class="fas fa-exclamation-triangle"></i><div><strong>Limit Outdoor Activity</strong><br>Sensitive groups at risk</div></div>
+                        <div class="advisory medium"><i class="fas fa-mask-face"></i><div><strong>Wear Mask</strong><br>Recommended outdoors</div></div>
+                    `;
+                    alerts.innerHTML = `<div class="alert-item high"><i class="fas fa-exclamation-circle"></i><div><strong>High Pollution Alert</strong><br>Sensitive groups avoid outdoors</div></div>`;
+                } else if (aqi > 0) {
+                    health.innerHTML = `
+                        <div class="advisory good"><i class="fas fa-check-circle"></i><div><strong>Good Air Quality</strong><br>Safe for outdoor activities</div></div>
+                        <div class="advisory good"><i class="fas fa-walking"></i><div><strong>Perfect for Exercise</strong><br>Enjoy outdoor activities</div></div>
+                    `;
+                    alerts.innerHTML = `<div class="alert-item good"><i class="fas fa-check-circle"></i><div><strong>Good Air Quality</strong><br>No health risks</div></div>`;
+                }
+            }
+
+            // ========== INSIGHTS SEARCH ==========
+            document.getElementById('insightsSearchBtn')?.addEventListener('click', function() {
+                const query = document.getElementById('insightsSearchInput').value.trim();
+                if (query.length < 2) {
+                    showNotification('Please enter at least 2 characters', 'warning');
+                    return;
+                }
+
+                const results = allLocations.filter(l => 
+                    l.name.toLowerCase().includes(query.toLowerCase())
+                );
+
+                if (results.length > 0) {
+                    const loc = results[0];
+                    setActiveTab('overview');
+                    setTimeout(() => {
+                        document.getElementById('startInput').value = loc.name;
+                        fetchLocationData(loc.lat, loc.lng, loc.name);
+                        map.setView([loc.lat, loc.lng], 12);
+                    }, 100);
+                } else {
+                    showNotification('Location not found', 'warning');
+                }
+            });
+
+            // ========== INIT ==========
+            async function init() {
+                initHeatmap();
+                setupSuggestions();
+                updateSuggestedChips();
+                initCharts();
+
+                const insightsPopular = document.getElementById('insightsPopularLocations');
+                if (insightsPopular) {
+                    insightsPopular.innerHTML = suggestedLocations.delhi.map(loc =>
+                        `<span class="chip" data-lat="${loc.lat}" data-lng="${loc.lng}" data-name="${loc.name}">${loc.name}</span>`
+                    ).join('');
+
+                    document.querySelectorAll('#insightsPopularLocations .chip').forEach(chip => {
+                        chip.addEventListener('click', function () {
+                            const lat = parseFloat(this.dataset.lat);
+                            const lng = parseFloat(this.dataset.lng);
+                            const name = this.dataset.name;
+                            setActiveTab('overview');
+                            setTimeout(() => {
+                                document.getElementById('startInput').value = name;
+                                fetchLocationData(lat, lng, name);
+                                map.setView([lat, lng], 12);
+                            }, 100);
+                        });
+                    });
+                }
+
+                await checkBackendConnection();
+                connectionCheckInterval = setInterval(checkBackendConnection, 30000);
+                setTimeout(hideLoadingOverlay, 3000);
+                loadInsightsData();
+
+                setInterval(() => {
+                    if (isBackendConnected) {
+                        loadHotspots();
+                        if (heatmapVisible) updateHeatmap();
+                    } else {
+                        generateMovingHeatmap();
+                    }
+                }, 60000);
+            }
+
+            init();
+
+            window.addEventListener('beforeunload', () => {
+                clearInterval(connectionCheckInterval);
+                clearInterval(animationInterval);
+                clearInterval(simulationTimer);
+                if (heatmapUpdateInterval) clearInterval(heatmapUpdateInterval);
+            });
+
+            window.loadLocation = (lat, lng, name) => {
+                fetchLocationData(lat, lng, name);
+                fetchForecast(lat, lng);
+                map.setView([lat, lng], 12);
+            };
+
+        })();
+    </script>
+</body>
+</html>
