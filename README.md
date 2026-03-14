@@ -117,12 +117,6 @@ The system architecture supports scaling to additional cities across India.
 
 ---
 
-<img width="600" height="750" alt="image" src="https://github.com/user-attachments/assets/d327b566-6ccc-4738-ba59-c2923b7836b3" />
-
-
-
----
-
 ## Workflow
 
 -Data Collection
